@@ -1,0 +1,467 @@
+[@implementation](implementation.md)
+
+[@testing-concepts](../../background/testing-concepts.md)
+
+[@example-tests](../../../src/concepts/UserAuth/UserAuthConcept.test.ts)
+
+# test: MediaGallery similar to the format of example-tests (multiple tests and helpful input/output print statements)
+# response:
+
+***
+
+# file: src/concepts/MediaLibrary/MediaLibraryConcept.test.ts
+
+```typescript
+import { assertEquals, assertExists } from "jsr:@std/assert";
+import { testDb, freshID } from "@utils/database.ts";
+import { ID } from "@utils/types.ts";
+import MediaLibraryConcept from "./MediaLibraryConcept.ts";
+
+// Helper for checking if a result is an error
+const isError = (result: any): result is { error: string } =>
+  result && typeof result === "object" && "error" in result;
+
+/**
+ * Principle Test for MediaLibraryConcept.
+ *
+ * Principle: only manages media data, not engagement or analytics
+ *
+ * This test demonstrates the core functionality of storing and retrieving media items,
+ * aligning with the principle that the concept focuses solely on media data management.
+ * It will:
+ * 1. Seed some provider-sourced media for a place.
+ * 2. Add a user-contributed media item to the same place.
+ * 3. Retrieve all media for that place, verifying content and order.
+ */
+Deno.test("Principle: MediaLibrary only manages media data", async () => {
+  console.log("\n=== Testing Principle Fulfillment for MediaLibrary ===");
+  const [db, client] = await testDb();
+  const mediaLibrary = new MediaLibraryConcept(db);
+
+  try {
+    const placeAId = freshID() as ID;
+    const userAId = freshID() as ID;
+    const providerUrls = [
+      "https://example.com/provider_img1.jpg",
+      "https://example.com/provider_img2.jpg",
+    ];
+    const userImageUrl = "https://example.com/user_img1.jpg";
+
+    console.log(`\n[SETUP] Initializing with Place ID: ${placeAId}`);
+    console.log(`  and User ID: ${userAId}`);
+
+    // 1. Seed provider-sourced media
+    console.log("\n[ACTION] seedMedia - Inserting provider images for Place A");
+    console.log(`  Input: { placeId: ${placeAId}, urls: ${providerUrls} }`);
+    const seedResult = await mediaLibrary.seedMedia({
+      placeId: placeAId,
+      urls: providerUrls,
+    });
+    console.log("  Output:", seedResult);
+    assertEquals(isError(seedResult), false, "Seeding should succeed.");
+    assertEquals(
+      (seedResult as { count: number }).count,
+      2,
+      "Should insert 2 media items.",
+    );
+    console.log(`  ✓ Successfully seeded 2 media items.`);
+
+    // 2. Add user-contributed media
+    console.log("\n[ACTION] addMedia - Adding user image for Place A");
+    console.log(
+      `  Input: { userId: ${userAId}, placeId: ${placeAId}, imageUrl: "${userImageUrl}" }`,
+    );
+    const addResult = await mediaLibrary.addMedia({
+      userId: userAId,
+      placeId: placeAId,
+      imageUrl: userImageUrl,
+    });
+    console.log("  Output:", addResult);
+    assertEquals(isError(addResult), false, "Adding media should succeed.");
+    assertExists((addResult as { mediaId: ID }).mediaId, "Media ID should be returned.");
+    const userMediaId = (addResult as { mediaId: ID }).mediaId;
+    console.log(`  ✓ User media added with ID: ${userMediaId}`);
+
+    // 3. Retrieve all media for Place A and verify
+    console.log("\n[QUERY] _getMediaByPlace - Retrieving media for Place A");
+    console.log(`  Input: { placeId: ${placeAId} }`);
+    const retrievedMedia = await mediaLibrary._getMediaByPlace({
+      placeId: placeAId,
+    });
+    console.log("  Output:", retrievedMedia);
+    assertEquals(isError(retrievedMedia), false, "Retrieval should succeed.");
+    if (isError(retrievedMedia)) return; // Type guard for subsequent assertions
+
+    assertEquals(
+      retrievedMedia.length,
+      3,
+      "Should retrieve all 3 media items.",
+    );
+    console.log(`  ✓ Retrieved ${retrievedMedia.length} media items.`);
+
+    // Verify ordering (most recent first)
+    // The user-added media should be the most recent.
+    assertEquals(
+      retrievedMedia[0].mediaIds,
+      userMediaId,
+      "Most recent media should be the user-contributed one.",
+    );
+    console.log(
+      `  ✓ Verified ordering: User-contributed media is the most recent.`,
+    );
+
+    // Verify presence of provider images (order among them is not guaranteed without more info)
+    const retrievedIds = retrievedMedia.map((item) => item.mediaIds);
+    // Find one of the provider URLs that was returned, to confirm they are present.
+    const firstProviderItem = await mediaLibrary.mediaItems.findOne({
+      placeId: placeAId,
+      source: "provider",
+      imageUrl: providerUrls[0],
+    });
+    assertExists(firstProviderItem, "First provider item should be in DB.");
+    assertEquals(
+      retrievedIds.includes(firstProviderItem._id),
+      true,
+      "Provider-sourced media should be present.",
+    );
+    console.log(
+      `  ✓ Verified provider-sourced media items are present.`,
+    );
+
+    console.log(
+      "\n✅ Principle demonstrated: MediaLibrary successfully manages media data (storage and retrieval).",
+    );
+  } finally {
+    await client.close();
+  }
+});
+
+/**
+ * Test Suite for the `seedMedia` action.
+ *
+ * Covers:
+ * - Successful insertion of provider-sourced media.
+ * - Handling of empty URLs array.
+ * - Handling of missing place ID.
+ */
+Deno.test("Action: seedMedia successfully inserts provider media and enforces requirements", async () => {
+  console.log("\n=== Testing seedMedia Action ===");
+  const [db, client] = await testDb();
+  const mediaLibrary = new MediaLibraryConcept(db);
+
+  try {
+    const placeId1 = freshID() as ID;
+    const urls1 = [
+      "https://example.com/provider_photo1.jpg",
+      "https://example.com/provider_photo2.jpg",
+    ];
+
+    // [TEST] Successful insertion
+    console.log(
+      "\n[TEST CASE] Successful insertion of provider-sourced media",
+    );
+    console.log(`  Input: { placeId: ${placeId1}, urls: ${urls1} }`);
+    const successResult = await mediaLibrary.seedMedia({
+      placeId: placeId1,
+      urls: urls1,
+    });
+    console.log("  Output:", successResult);
+    assertEquals(isError(successResult), false, "Should not return an error.");
+    assertEquals(
+      (successResult as { count: number }).count,
+      2,
+      "Should insert 2 items.",
+    );
+    console.log(`  ✓ Successfully inserted 2 media items for place ${placeId1}.`);
+
+    // [VERIFY] Check state for inserted items
+    const count = await mediaLibrary.mediaItems.countDocuments({
+      placeId: placeId1,
+      source: "provider",
+    });
+    assertEquals(count, 2, "Database should contain 2 provider media items.");
+    const firstItem = await mediaLibrary.mediaItems.findOne({
+      placeId: placeId1,
+      imageUrl: urls1[0],
+    });
+    assertExists(firstItem, "First seeded item should exist in DB.");
+    assertEquals(firstItem?.source, "provider", "Source should be 'provider'.");
+    assertEquals(firstItem?.contributorId, null, "Contributor should be null.");
+    console.log(`  ✓ State verified: items present and correctly attributed.`);
+
+    // [TEST CASE] Reject with empty URLs array
+    console.log("\n[TEST CASE] Rejecting seeding with empty URLs array");
+    const emptyUrlsResult = await mediaLibrary.seedMedia({
+      placeId: freshID() as ID,
+      urls: [],
+    });
+    console.log("  Output:", emptyUrlsResult);
+    assertEquals(isError(emptyUrlsResult), true, "Should return an error.");
+    assertEquals(
+      (emptyUrlsResult as { error: string }).error,
+      "URLs set cannot be empty.",
+      "Error message should indicate empty URLs.",
+    );
+    console.log(`  ✓ Correctly rejected empty URLs array.`);
+
+    // [TEST CASE] Reject with missing placeId
+    console.log("\n[TEST CASE] Rejecting seeding with missing placeId");
+    // @ts-ignore: Intentionally testing missing required argument
+    const missingPlaceIdResult = await mediaLibrary.seedMedia({ urls: urls1 });
+    console.log("  Output:", missingPlaceIdResult);
+    assertEquals(isError(missingPlaceIdResult), true, "Should return an error.");
+    assertEquals(
+      (missingPlaceIdResult as { error: string }).error,
+      "placeId must be provided.",
+      "Error message should indicate missing placeId.",
+    );
+    console.log(`  ✓ Correctly rejected missing placeId.`);
+
+    console.log("\n✅ All seedMedia requirements and effects verified.");
+  } finally {
+    await client.close();
+  }
+});
+
+/**
+ * Test Suite for the `addMedia` action.
+ *
+ * Covers:
+ * - Successful addition of a user-contributed media item.
+ * - Handling of empty image URL.
+ * - Handling of missing user ID.
+ * - Handling of missing place ID.
+ */
+Deno.test("Action: addMedia successfully adds user media and enforces requirements", async () => {
+  console.log("\n=== Testing addMedia Action ===");
+  const [db, client] = await testDb();
+  const mediaLibrary = new MediaLibraryConcept(db);
+
+  try {
+    const userBId = freshID() as ID;
+    const placeId2 = freshID() as ID;
+    const userImageUrl2 = "https://example.com/user_upload.jpg";
+
+    // [TEST] Successful addition
+    console.log("\n[TEST CASE] Successful addition of user-contributed media");
+    console.log(
+      `  Input: { userId: ${userBId}, placeId: ${placeId2}, imageUrl: "${userImageUrl2}" }`,
+    );
+    const successResult = await mediaLibrary.addMedia({
+      userId: userBId,
+      placeId: placeId2,
+      imageUrl: userImageUrl2,
+    });
+    console.log("  Output:", successResult);
+    assertEquals(isError(successResult), false, "Should not return an error.");
+    assertExists(
+      (successResult as { mediaId: ID }).mediaId,
+      "Returned mediaId should exist.",
+    );
+    const newMediaId = (successResult as { mediaId: ID }).mediaId;
+    console.log(
+      `  ✓ Successfully added user media with ID: ${newMediaId}.`,
+    );
+
+    // [VERIFY] Check state for inserted item
+    const insertedItem = await mediaLibrary.mediaItems.findOne({
+      _id: newMediaId,
+    });
+    assertExists(insertedItem, "Inserted item should exist in DB.");
+    assertEquals(insertedItem?.placeId, placeId2, "Place ID should match.");
+    assertEquals(
+      insertedItem?.contributorId,
+      userBId,
+      "Contributor ID should match.",
+    );
+    assertEquals(
+      insertedItem?.imageUrl,
+      userImageUrl2,
+      "Image URL should match.",
+    );
+    assertEquals(insertedItem?.source, "user", "Source should be 'user'.");
+    assertExists(insertedItem?.createdAt, "createdAt should be set.");
+    console.log(`  ✓ State verified: item present and correctly attributed.`);
+
+    // [TEST CASE] Reject with empty imageUrl
+    console.log("\n[TEST CASE] Rejecting adding media with empty imageUrl");
+    const emptyImageUrlResult = await mediaLibrary.addMedia({
+      userId: userBId,
+      placeId: placeId2,
+      imageUrl: "",
+    });
+    console.log("  Output:", emptyImageUrlResult);
+    assertEquals(isError(emptyImageUrlResult), true, "Should return an error.");
+    assertEquals(
+      (emptyImageUrlResult as { error: string }).error,
+      "imageUrl cannot be empty.",
+      "Error message should indicate empty imageUrl.",
+    );
+    console.log(`  ✓ Correctly rejected empty imageUrl.`);
+
+    // [TEST CASE] Reject with missing userId
+    console.log("\n[TEST CASE] Rejecting adding media with missing userId");
+    // @ts-ignore: Intentionally testing missing required argument
+    const missingUserIdResult = await mediaLibrary.addMedia({
+      placeId: placeId2,
+      imageUrl: "https://example.com/missinguser.jpg",
+    });
+    console.log("  Output:", missingUserIdResult);
+    assertEquals(isError(missingUserIdResult), true, "Should return an error.");
+    assertEquals(
+      (missingUserIdResult as { error: string }).error,
+      "userId must be provided.",
+      "Error message should indicate missing userId.",
+    );
+    console.log(`  ✓ Correctly rejected missing userId.`);
+
+    // [TEST CASE] Reject with missing placeId
+    console.log("\n[TEST CASE] Rejecting adding media with missing placeId");
+    // @ts-ignore: Intentionally testing missing required argument
+    const missingPlaceIdResult = await mediaLibrary.addMedia({
+      userId: userBId,
+      imageUrl: "https://example.com/missingplace.jpg",
+    });
+    console.log("  Output:", missingPlaceIdResult);
+    assertEquals(isError(missingPlaceIdResult), true, "Should return an error.");
+    assertEquals(
+      (missingPlaceIdResult as { error: string }).error,
+      "placeId must be provided.",
+      "Error message should indicate missing placeId.",
+    );
+    console.log(`  ✓ Correctly rejected missing placeId.`);
+
+    console.log("\n✅ All addMedia requirements and effects verified.");
+  } finally {
+    await client.close();
+  }
+});
+
+/**
+ * Test Suite for the `_getMediaByPlace` query.
+ *
+ * Covers:
+ * - Successful retrieval of media items for an existing place, ordered by `createdAt` desc.
+ * - Retrieval of an empty set for a place with no media.
+ * - Handling of missing place ID.
+ */
+Deno.test("Query: _getMediaByPlace retrieves correct media items and enforces requirements", async () => {
+  console.log("\n=== Testing _getMediaByPlace Query ===");
+  const [db, client] = await testDb();
+  const mediaLibrary = new MediaLibraryConcept(db);
+
+  try {
+    const placeCId = freshID() as ID;
+    const placeDId = freshID() as ID; // For testing a place with no media
+    const userCId = freshID() as ID;
+
+    // [SETUP] Add multiple media items to placeCId with different creation times
+    console.log("\n[SETUP] Adding multiple media items for Place C");
+
+    // Oldest item (seeded)
+    await mediaLibrary.seedMedia({
+      placeId: placeCId,
+      urls: ["https://example.com/old_provider_img.jpg"],
+    });
+    await mediaLibrary.mediaItems.updateOne(
+      { placeId: placeCId, imageUrl: "https://example.com/old_provider_img.jpg" },
+      { $set: { createdAt: new Date("2023-01-01T10:00:00Z") } },
+    );
+    console.log(`  ✓ Added oldest provider item.`);
+
+    // Middle item (user-added)
+    const midUserResult = await mediaLibrary.addMedia({
+      userId: userCId,
+      placeId: placeCId,
+      imageUrl: "https://example.com/mid_user_img.jpg",
+    });
+    await mediaLibrary.mediaItems.updateOne(
+      { _id: (midUserResult as { mediaId: ID }).mediaId },
+      { $set: { createdAt: new Date("2023-01-01T11:00:00Z") } },
+    );
+    console.log(`  ✓ Added middle user item.`);
+
+    // Newest item (seeded)
+    await mediaLibrary.seedMedia({
+      placeId: placeCId,
+      urls: ["https://example.com/new_provider_img.jpg"],
+    });
+    await mediaLibrary.mediaItems.updateOne(
+      { placeId: placeCId, imageUrl: "https://example.com/new_provider_img.jpg" },
+      { $set: { createdAt: new Date("2023-01-01T12:00:00Z") } },
+    );
+    console.log(`  ✓ Added newest provider item.`);
+
+    // [TEST CASE] Successful retrieval and correct ordering
+    console.log(
+      "\n[TEST CASE] Retrieving media for Place C, expecting correct order",
+    );
+    console.log(`  Input: { placeId: ${placeCId} }`);
+    const retrievedMedia = await mediaLibrary._getMediaByPlace({
+      placeId: placeCId,
+    });
+    console.log("  Output:", retrievedMedia);
+    assertEquals(isError(retrievedMedia), false, "Query should succeed.");
+    if (isError(retrievedMedia)) return; // Type guard
+
+    assertEquals(
+      retrievedMedia.length,
+      3,
+      "Should retrieve 3 media items.",
+    );
+    console.log(`  ✓ Retrieved ${retrievedMedia.length} media items.`);
+
+    // Fetch the actual documents to verify creation dates for ordering
+    const allItems = await mediaLibrary.mediaItems
+      .find({ placeId: placeCId })
+      .sort({ createdAt: -1 }) // Ordered as expected by the query
+      .toArray();
+
+    assertEquals(
+      retrievedMedia[0].mediaIds,
+      allItems[0]._id,
+      "First item should be the newest.",
+    );
+    assertEquals(
+      retrievedMedia[1].mediaIds,
+      allItems[1]._id,
+      "Second item should be the middle one.",
+    );
+    assertEquals(
+      retrievedMedia[2].mediaIds,
+      allItems[2]._id,
+      "Third item should be the oldest.",
+    );
+    console.log(`  ✓ Verified media items are ordered by createdAt descending.`);
+
+    // [TEST CASE] Retrieve for a place with no media
+    console.log("\n[TEST CASE] Retrieving media for a place with no media");
+    console.log(`  Input: { placeId: ${placeDId} }`);
+    const emptyResult = await mediaLibrary._getMediaByPlace({
+      placeId: placeDId,
+    });
+    console.log("  Output:", emptyResult);
+    assertEquals(isError(emptyResult), false, "Query should succeed.");
+    if (isError(emptyResult)) return;
+    assertEquals(emptyResult.length, 0, "Should return an empty array.");
+    console.log(`  ✓ Correctly returned an empty array for a place with no media.`);
+
+    // [TEST CASE] Reject with missing placeId
+    console.log("\n[TEST CASE] Rejecting query with missing placeId");
+    // @ts-ignore: Intentionally testing missing required argument
+    const missingPlaceIdResult = await mediaLibrary._getMediaByPlace({});
+    console.log("  Output:", missingPlaceIdResult);
+    assertEquals(isError(missingPlaceIdResult), true, "Should return an error.");
+    assertEquals(
+      (missingPlaceIdResult as { error: string }).error,
+      "placeId must be provided.",
+      "Error message should indicate missing placeId.",
+    );
+    console.log(`  ✓ Correctly rejected missing placeId.`);
+
+    console.log("\n✅ All _getMediaByPlace requirements and effects verified.");
+  } finally {
+    await client.close();
+  }
+});
+```

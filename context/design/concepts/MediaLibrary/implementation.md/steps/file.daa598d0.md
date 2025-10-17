@@ -1,3 +1,12 @@
+---
+timestamp: 'Fri Oct 17 2025 16:02:32 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251017_160232.494b3edf.md]]'
+content_id: daa598d07a6619e7f6e2ec9220b77d0c313bf91be5c279d9d9921ffdb5b89d76
+---
+
+# file: deno.json
+
+```json
 {
     "imports": {
         "@concepts/": "./src/concepts/",
@@ -6,9 +15,9 @@
     "tasks": {
         "concepts": "deno run --allow-net --allow-read --allow-sys --allow-env src/concept_server.ts --port 8000 --baseUrl /api",
         "test": "deno test --allow-read --allow-env --allow-net --allow-sys",
+        "test:place": "deno test --allow-read --allow-env --allow-net --allow-sys src/concepts/PlaceCatalog/PlaceCatalogConcept.test.ts",
         "test:user": "deno test --allow-read --allow-env --allow-net --allow-sys src/concepts/UserAuth/UserAuthConcept.test.ts",
-       "test:place": "deno test --allow-read --allow-env --allow-net --allow-sys src/concepts/PlaceCatalog/PlaceCatalogConcept.test.ts",
-        "test:media-library": "deno test --allow-read --allow-env --allow-net --allow-sys src/concepts/MediaLibrary/MediaLibrary.test.ts",
         "test:likert": "deno test --allow-read --allow-env --allow-net --allow-sys src/concepts/LikertSurvey/LikertSurveyConcept.test.ts"
     }
 }
+```
