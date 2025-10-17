@@ -1,3 +1,12 @@
+---
+timestamp: 'Fri Oct 17 2025 15:31:06 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251017_153106.19d89d2c.md]]'
+content_id: daa598d07a6619e7f6e2ec9220b77d0c313bf91be5c279d9d9921ffdb5b89d76
+---
+
+# file: deno.json
+
+```json
 {
     "imports": {
         "@concepts/": "./src/concepts/",
@@ -11,3 +20,4 @@
         "test:likert": "deno test --allow-read --allow-env --allow-net --allow-sys src/concepts/LikertSurvey/LikertSurveyConcept.test.ts"
     }
 }
+```

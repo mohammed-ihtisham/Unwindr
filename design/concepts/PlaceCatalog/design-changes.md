@@ -1,0 +1,3 @@
+# Design Changes to PlaceCatalog
+
+The fundamental concept of the PlaceCatalog largely remains consistent with its initial design. A significant change involves the addition of an `_id` field, crucial for its operation with MongoDB. This `_id` serves as a unique identifier for each catalog entry, enabling efficient retrieval of place information directly from the database. Instead of working with `place` and `user` objects, the catalog now primarily utilizes `userId` and `placeId` (both of type `Id`). This ID-based approach simplifies data relationships and optimizes database queries.
