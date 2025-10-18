@@ -1,0 +1,70 @@
+# InterestFilter Concept
+
+concept InterestFilter [User, Place]
+purpose allow users to express their interests so places can be filtered to match their preferences
+principle users pick preference tags or describe their desired "vibe" in natural language, 
+  which gets translated into interest tags by LLMs, so places can be filtered to match their
+  preferences
+
+state
+  a set of AllowedTag with
+    a tag String
+    a description String
+
+  a set of UserPreferences with
+    a userId Id
+    a tags set of String
+    a source String // "manual" or "llm"
+
+  a set of UserInferredPrefs with
+    a userId Id
+    a tags set String
+    an exclusions set String
+    a confidence Number
+    a rationale String
+    a warnings set String
+    a lastPrompt String
+
+  a set of PlaceTags with
+    a placeId Id
+    a tags set String
+
+actions
+  setPreferences (userId: Id, tags: set String)
+    requires user is authenticated, tags not empty, and all tags in AllowedTags
+    effect saves preferences for user with source="manual"
+
+  inferPreferencesFromText (userId: Id, text: String, radius?: Number, locationHint?: String)
+    requires user is authenticated and text is not empty
+    effect calls an AI model to interpret the text and suggest tags and optional exclusions,
+      records confidence and rationale, stores them in UserInferredPrefs,
+      and updates UserPreferences with source = "llm" and the inferred tags
+
+  tagPlace (placeId: Id, tag: String)
+    requires place exists and tag in AllowedTags
+    effect associates the tag with the place in PlaceTags
+
+  clearPreferences (userId: Id)
+    requires user is authenticated
+    effect removes all UserPreferences and UserInferredPrefs for the user
+
+  getMatchingPlaces (userId: Id, places: set Id) : (matches: set Place)
+    requires user has either set manual or llm preferences
+    effect returns places whose tags overlap with user's preferred tags,
+      ranked by relevance score, down-ranking places that match excluded tags
+
+validators
+  whitelistValidator (tags: set String, exclusions: set String) (valid: Flag)
+    ensures every tag is in AllowedTags
+
+  tagCountValidator (tags: set String) : (valid: Flag)
+    ensures the number of tags is under 7
+
+  contradictionValidator (tags: set String) : (hasContradictions: Flag, conflicts: set Pair)
+    detects contradictory tag pairs (e.g., quiet_spaces vs lively_nightlife)
+    returns conflict information for user resolution instead of blocking
+    triggers needsConfirmation flag when contradictions found
+
+  confidenceValidator (confidence: Number) : (valid: Flag)
+    ensures 0 ≤ confidence ≤ 1;
+    if confidence < 0.65, return needsConfirmation flag (True)
