@@ -1,0 +1,3 @@
+# Design Changes to QualityRanking
+
+The core concept of QualityRanking largely remains consistent with its initial design, preserving its fundamental purpose. Key modifications primarily involve the refactoring of action parameters, where several were renamed for clarity and consistency across the API. A significant change was the decision to replace specific `User` and `Place` types with a more generic `Id` type for identifiers. This alteration was crucial for better alignment with MongoDB's document-oriented structure and to leverage primitive data types for simplified storage and retrieval. Aside from these structural adjustments to enhance database compatibility, no other significant conceptual issues arose during the design process.

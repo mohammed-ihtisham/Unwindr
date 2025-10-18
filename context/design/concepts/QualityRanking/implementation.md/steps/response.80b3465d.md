@@ -1,0 +1,218 @@
+---
+timestamp: 'Fri Oct 17 2025 20:32:53 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251017_203253.b97a8437.md]]'
+content_id: 80b3465d6f2cabb3cbffa92e455791a01e67adb6ef7b259a029889ca3f163240
+---
+
+# response:
+
+```typescript
+// file: src/concepts/QualityRanking/QualityRankingConcept.ts
+import { Collection, Db } from "npm:mongodb";
+import { Empty, ID } from "@utils/types.ts";
+// freshID is not used directly in this concept as _id fields are derived from input IDs (Place, User)
+
+// Declare collection prefix, use concept name
+const PREFIX = "QualityRanking" + ".";
+
+// Generic types of this concept, as specified in the concept section [Place]
+type Place = ID;
+// User is implicitly used in RankingPreferences, so we define it as ID here for type safety
+type User = ID;
+
+/**
+ * a set of RankingMetrics with
+ * a placeId Id
+ * a engagementRatio Number
+ * a visitorVolume Number
+ * a qualityScore Number
+ * a lastUpdated Date
+ */
+interface RankingMetricsDoc {
+  _id: Place; // Corresponds to placeId for unique identification of metrics for a place
+  engagementRatio: number; // Represents the raw engagement score (e.g., total positive interactions)
+  visitorVolume: number; // Represents the total number of visits
+  qualityScore: number; // The computed score: engagement / max(visits, 1)
+  lastUpdated: Date; // Timestamp of the last update to these metrics
+}
+
+/**
+ * a set of RankingPreferences with
+ * a userId Id
+ * a prefersEmergent Flag
+ * a radius Number
+ */
+interface RankingPreferencesDoc {
+  _id: User; // Corresponds to userId for unique identification of user preferences
+  prefersEmergent: boolean; // Flag to indicate if the user prefers "emergent" (lower visitor volume) places
+  radius: number; // Preferred radius (in some abstract unit) for recommendations
+}
+
+/**
+ * concept QualityRanking [Place]
+ * purpose surface lesser-known places that have high engagement but low mainstream visibility
+ * principle compute a score that promotes well-loved places regardless of popularity,
+ * helping users discover authentic local favorites
+ */
+export default class QualityRankingConcept {
+  private rankingMetrics: Collection<RankingMetricsDoc>;
+  private rankingPreferences: Collection<RankingPreferencesDoc>;
+
+  constructor(private readonly db: Db) {
+    this.rankingMetrics = this.db.collection(PREFIX + "rankingMetrics");
+    this.rankingPreferences = this.db.collection(PREFIX + "rankingPreferences");
+  }
+
+  /**
+   * updateMetrics (placeId: Id, visits: Number, engagement: Number): Empty
+   *
+   * **requires** place exists and visits >= 0 and engagement >= 0
+   *
+   * **effects** updates metrics (visitorVolume, engagementRatio, lastUpdated) for a given place.
+   *            If metrics for the place do not exist, they are created.
+   *            This action does NOT recompute the qualityScore; that is handled by `calculateQualityScore`.
+   */
+  async updateMetrics(
+    { placeId, visits, engagement }: { placeId: Place; visits: number; engagement: number },
+  ): Promise<Empty | { error: string }> {
+    if (visits < 0 || engagement < 0) {
+      return { error: "Visits and engagement must be non-negative." };
+    }
+
+    // The "place exists" precondition implies that placeId refers to a valid external entity.
+    // Within this concept, we handle it by creating/updating metrics for the given placeId.
+    await this.rankingMetrics.updateOne(
+      { _id: placeId },
+      {
+        $set: {
+          engagementRatio: engagement,
+          visitorVolume: visits,
+          lastUpdated: new Date(),
+        },
+        $setOnInsert: {
+          // Initialize qualityScore to 0 if a new document is inserted
+          qualityScore: 0,
+        },
+      },
+      { upsert: true }, // Create the document if it doesn't exist
+    );
+
+    return {};
+  }
+
+  /**
+   * calculateQualityScore (placeId: Id): (score: Number)
+   *
+   * **requires** place exists and has engagement metrics (visitorVolume and engagementRatio) recorded
+   *
+   * **effects** computes the engagement-to-visit ratio using the formula `engagement / max(visits, 1)`,
+   *            updates the `qualityScore` for the place in the database, and returns the newly computed score.
+   */
+  async calculateQualityScore(
+    { placeId }: { placeId: Place },
+  ): Promise<{ score: number } | { error: string }> {
+    const metrics = await this.rankingMetrics.findOne({ _id: placeId });
+
+    if (!metrics) {
+      return { error: `No metrics found for placeId: ${placeId}.` };
+    }
+    // Ensure that required fields are present and are numbers before calculation
+    if (typeof metrics.engagementRatio !== "number" || typeof metrics.visitorVolume !== "number") {
+      return { error: `Engagement metrics (engagementRatio, visitorVolume) are incomplete for placeId: ${placeId}.` };
+    }
+
+    // Design Note: Quality score = engagement / max(visits, 1) to avoid division by zero
+    const newQualityScore = metrics.engagementRatio / Math.max(metrics.visitorVolume, 1);
+
+    await this.rankingMetrics.updateOne(
+      { _id: placeId },
+      { $set: { qualityScore: newQualityScore, lastUpdated: new Date() } },
+    );
+
+    return { score: newQualityScore };
+  }
+
+  /**
+   * setPreferences (userId: Id, prefersEmergent: Boolean, radius: Number): Empty
+   *
+   * **requires** user is authenticated (this external check is typically handled by syncs) and radius > 0
+   *
+   * **effects** stores or updates the ranking preferences for the given user,
+   *            including their preference for emergent places and their desired recommendation radius.
+   */
+  async setPreferences(
+    { userId, prefersEmergent, radius }: { userId: User; prefersEmergent: boolean; radius: number },
+  ): Promise<Empty | { error: string }> {
+    if (radius <= 0) {
+      return { error: "Radius must be greater than 0." };
+    }
+
+    // The "user is authenticated" precondition is a higher-level concern
+    // that would typically be enforced by a synchronization (sync) from a UserAuthentication concept.
+    // This concept focuses purely on managing preferences given a userId.
+    await this.rankingPreferences.updateOne(
+      { _id: userId },
+      { $set: { prefersEmergent, radius } },
+      { upsert: true }, // Create preferences if they don't exist
+    );
+
+    return {};
+  }
+
+  /**
+   * _getRecommendedPlaces (userId: Id, centerLat: Number, centerLng: Number): (place: Id)
+   *
+   * **requires** user has ranking preferences and coordinates (centerLat, centerLng) are valid
+   *
+   * **effects** returns a list of recommended places (by their ID), ranked according to user preferences.
+   *
+   * PROBLEM: The concept's state does not include geospatial information for 'Place' IDs (e.g., latitude, longitude).
+   * Therefore, it cannot actually perform geographical filtering "within radius" using 'centerLat' and 'centerLng'
+   * without violating the "independence" principle (by querying another concept for location data)
+   * or assuming an undocumented internal state for 'Place' coordinates.
+   *
+   * SOLUTION: This implementation will retrieve and rank *all* places known to QualityRanking (i.e., for which metrics exist)
+   * according to the user's `prefersEmergent` preference. It will IGNORE `centerLat`, `centerLng`, and `radius` for geographical filtering.
+   * If specific geo-filtered recommendations are needed, a synchronization (sync) would be required to:
+   * 1. Query an external 'PlaceLocation' concept to get a list of place IDs within the specified radius.
+   * 2. Pass this pre-filtered list of place IDs to a modified version of this action (or another action)
+   *    within QualityRanking to then perform the ranking on the subset.
+   * Alternatively, the `QualityRanking` concept's `state` would need to be extended to include
+   * geospatial coordinates for each `Place` if it were to handle geo-filtering independently.
+   */
+  async _getRecommendedPlaces(
+    { userId, centerLat, centerLng }: { userId: User; centerLat: number; centerLng: number },
+  ): Promise<Array<{ place: Place }> | { error: string }> {
+    const preferences = await this.rankingPreferences.findOne({ _id: userId });
+
+    if (!preferences) {
+      return { error: `No ranking preferences found for userId: ${userId}.` };
+    }
+
+    // Per the PROBLEM/SOLUTION note above, centerLat, centerLng, and preferences.radius are ignored for geo-filtering.
+    // We proceed to rank all available places based on quality and preference.
+    // A check for valid coordinates (e.g., !isNaN(centerLat) && !isNaN(centerLng)) could be added for robustness
+    // if these inputs were to be used by an external component after this concept's execution.
+
+    const allMetrics = await this.rankingMetrics.find({}).toArray();
+
+    allMetrics.sort((a, b) => {
+      if (preferences.prefersEmergent) {
+        // If prefersEmergent is true, prioritize places with lower visitor volume first (ascending),
+        // then by higher quality score (descending) for ties in visitor volume.
+        if (a.visitorVolume !== b.visitorVolume) {
+          return a.visitorVolume - b.visitorVolume;
+        }
+        return b.qualityScore - a.qualityScore;
+      } else {
+        // Otherwise (user does not prefer emergent), prioritize places by higher quality score (descending).
+        return b.qualityScore - a.qualityScore;
+      }
+    });
+
+    // Queries should return an array of objects, where each object contains the named result field.
+    // The spec return type `(places: set Id)` maps to an array of objects, each with a 'place' field of type ID.
+    return allMetrics.map((metric) => ({ place: metric._id }));
+  }
+}
+```
