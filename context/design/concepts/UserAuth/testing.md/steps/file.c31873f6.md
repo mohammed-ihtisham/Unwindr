@@ -1,5 +1,14 @@
-import { Collection, Db } from "npm:mongodb";
-import bcrypt from "npm:bcryptjs@2.4.3"; // Using bcryptjs for password hashing
+---
+timestamp: 'Sat Oct 18 2025 20:36:12 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251018_203612.aae56878.md]]'
+content_id: c31873f6d65278e9afd02ab00db0dc883a357344a70f17e8a8057752ac7f8d3d
+---
+
+# file: src/concepts/UserAuth/UserAuthConcept.ts
+
+```typescript
+import { Collection, Db } from "npm:mongodb@6.10.0";
+import { compare, hash } from "npm:bcryptjs@2.4.3"; // Using bcryptjs for password hashing
 import { ID } from "@utils/types.ts";
 import { freshID } from "@utils/database.ts";
 
@@ -53,6 +62,8 @@ export default class UserAuthConcept {
     this.activeSessions = this.db.collection(PREFIX + "activeSessions");
     // Index for finding sessions by user (e.g., to invalidate all sessions for a user)
     this.activeSessions.createIndex({ userId: 1 });
+    // Ensure session token is unique
+    this.activeSessions.createIndex({ _id: 1 }, { unique: true });
   }
 
   /**
@@ -78,7 +89,7 @@ export default class UserAuthConcept {
     }
 
     // Hash the password
-    const passwordHash = await bcrypt.hash(password, 10); // 10 is the salt rounds
+    const passwordHash = await hash(password, 10); // 10 is the salt rounds
 
     // Generate a fresh ID for the new user
     const newUserId = freshID();
@@ -117,7 +128,7 @@ export default class UserAuthConcept {
     }
 
     // Compare the provided password with the stored hash
-    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+    const isPasswordValid = await compare(password, user.passwordHash);
 
     // If password does not match
     if (!isPasswordValid) {
@@ -236,15 +247,12 @@ export default class UserAuthConcept {
       return { error: "User not found for session" };
     }
 
-    const isOldPasswordValid = await bcrypt.compare(
-      oldPassword,
-      user.passwordHash,
-    );
+    const isOldPasswordValid = await compare(oldPassword, user.passwordHash);
     if (!isOldPasswordValid) {
       return { error: "Old password does not match" };
     }
 
-    const newPasswordHash = await bcrypt.hash(newPassword, 10);
+    const newPasswordHash = await hash(newPassword, 10);
 
     // Update password
     await this.users.updateOne(
@@ -287,9 +295,7 @@ export default class UserAuthConcept {
       return { error: "Admin user not found for session" };
     }
 
-    // Allow self-granting or require moderator privileges
-    const isSelfGrant = adminUser._id === targetUserId;
-    if (!isSelfGrant && !adminUser.canModerate) {
+    if (!adminUser.canModerate) {
       return { error: "Admin user does not have moderator privileges" };
     }
 
@@ -303,7 +309,6 @@ export default class UserAuthConcept {
       return { success: true };
     }
 
-    // Grant moderator privileges
     await this.users.updateOne(
       { _id: targetUserId },
       { $set: { canModerate: true } },
@@ -415,3 +420,5 @@ export default class UserAuthConcept {
     return [{ isModerator: user.canModerate }];
   }
 }
+
+```

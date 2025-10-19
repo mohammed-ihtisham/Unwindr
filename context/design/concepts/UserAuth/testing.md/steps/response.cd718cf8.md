@@ -1,10 +1,8 @@
-[@implementation](implementation.md)
-
-[@testing-concepts](../../background/testing-concepts.md)
-
-[@example-tests](../../../src/concepts/MediaAnalytics/MediaAnalyticsConcept.test.ts)
-
-# test: UserAuth similar to the format of example-tests (multiple tests and helpful input/output print statements)
+---
+timestamp: 'Sat Oct 18 2025 20:37:03 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251018_203703.8d339e50.md]]'
+content_id: cd718cf82fe103f07fa9affc88907c15a215f80012cc8a147b58af118811221a
+---
 
 # response:
 

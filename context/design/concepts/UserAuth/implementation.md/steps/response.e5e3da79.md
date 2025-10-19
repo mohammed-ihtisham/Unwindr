@@ -1,6 +1,27 @@
+---
+timestamp: 'Sat Oct 18 2025 12:17:39 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251018_121739.36393ca4.md]]'
+content_id: e5e3da797ca2c3a34bf38b184efe3f5976c5e25a10170417d8a05c7ef3f8000a
+---
+
+# response:
+
+To implement the updated `UserAuth` concept, we need to:
+
+1. **Update the State**: Add a new collection for `activeSessions` to manage user sessions.
+2. **Implement New Actions**: Add `login`, `logout`, `getAuthenticatedUser`, `changePassword`, and `revokeModerator`.
+3. **Modify Existing Actions**: Update `grantModerator` to use `adminSessionToken` instead of `adminUserId`.
+4. **Review Queries**: Ensure existing queries `_getUserDetails` and `_isModerator` are consistent with the new state and follow query conventions.
+5. **Documentation**: Add JSDoc comments for all new and modified actions, detailing their signature, requirements, and effects.
+6. **Error Handling**: Maintain the consistent `{ error: string }` return type for failures.
+
+Here's the updated `UserAuthConcept.ts` file:
+
+```typescript
+// file: src/concepts/UserAuth/UserAuthConcept.ts
 import { Collection, Db } from "npm:mongodb";
-import bcrypt from "npm:bcryptjs@2.4.3"; // Using bcryptjs for password hashing
-import { ID } from "@utils/types.ts";
+import { compare, hash } from "npm:bcryptjs"; // Using bcryptjs for password hashing
+import { Empty, ID } from "@utils/types.ts";
 import { freshID } from "@utils/database.ts";
 
 // Declare collection prefix, use concept name
@@ -53,6 +74,8 @@ export default class UserAuthConcept {
     this.activeSessions = this.db.collection(PREFIX + "activeSessions");
     // Index for finding sessions by user (e.g., to invalidate all sessions for a user)
     this.activeSessions.createIndex({ userId: 1 });
+    // Ensure session token is unique
+    this.activeSessions.createIndex({ _id: 1 }, { unique: true });
   }
 
   /**
@@ -78,7 +101,7 @@ export default class UserAuthConcept {
     }
 
     // Hash the password
-    const passwordHash = await bcrypt.hash(password, 10); // 10 is the salt rounds
+    const passwordHash = await hash(password, 10); // 10 is the salt rounds
 
     // Generate a fresh ID for the new user
     const newUserId = freshID();
@@ -117,7 +140,7 @@ export default class UserAuthConcept {
     }
 
     // Compare the provided password with the stored hash
-    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+    const isPasswordValid = await compare(password, user.passwordHash);
 
     // If password does not match
     if (!isPasswordValid) {
@@ -149,9 +172,7 @@ export default class UserAuthConcept {
   async logout(
     { sessionToken }: { sessionToken: string },
   ): Promise<{ success: boolean }> {
-    const result = await this.activeSessions.deleteOne({
-      _id: sessionToken as SessionToken,
-    });
+    const result = await this.activeSessions.deleteOne({ _id: sessionToken as SessionToken });
     return { success: result.deletedCount === 1 };
   }
 
@@ -164,16 +185,8 @@ export default class UserAuthConcept {
    */
   async getAuthenticatedUser(
     { sessionToken }: { sessionToken: string },
-  ): Promise<
-    {
-      userProfile:
-        | { userId: User; username: string; canModerate: boolean }
-        | null;
-    }
-  > {
-    const session = await this.activeSessions.findOne({
-      _id: sessionToken as SessionToken,
-    });
+  ): Promise<{ userProfile: { userId: User; username: string; canModerate: boolean } | null }> {
+    const session = await this.activeSessions.findOne({ _id: sessionToken as SessionToken });
 
     if (!session) {
       return { userProfile: null };
@@ -187,9 +200,7 @@ export default class UserAuthConcept {
     if (!user) {
       // This case means a session exists for a non-existent user, indicating
       // a data inconsistency. Clean up the session.
-      await this.activeSessions.deleteOne({
-        _id: sessionToken as SessionToken,
-      });
+      await this.activeSessions.deleteOne({ _id: sessionToken as SessionToken });
       return { userProfile: null };
     }
 
@@ -220,9 +231,7 @@ export default class UserAuthConcept {
       return { error: "New password cannot be empty" };
     }
 
-    const session = await this.activeSessions.findOne({
-      _id: sessionToken as SessionToken,
-    });
+    const session = await this.activeSessions.findOne({ _id: sessionToken as SessionToken });
     if (!session) {
       return { error: "Invalid session" };
     }
@@ -230,21 +239,16 @@ export default class UserAuthConcept {
     const user = await this.users.findOne({ _id: session.userId });
     if (!user) {
       // Data inconsistency: session points to non-existent user. Clean up session.
-      await this.activeSessions.deleteOne({
-        _id: sessionToken as SessionToken,
-      });
+      await this.activeSessions.deleteOne({ _id: sessionToken as SessionToken });
       return { error: "User not found for session" };
     }
 
-    const isOldPasswordValid = await bcrypt.compare(
-      oldPassword,
-      user.passwordHash,
-    );
+    const isOldPasswordValid = await compare(oldPassword, user.passwordHash);
     if (!isOldPasswordValid) {
       return { error: "Old password does not match" };
     }
 
-    const newPasswordHash = await bcrypt.hash(newPassword, 10);
+    const newPasswordHash = await hash(newPassword, 10);
 
     // Update password
     await this.users.updateOne(
@@ -266,14 +270,9 @@ export default class UserAuthConcept {
    * **effect** sets canModerate to true for targetUser, returns true on success, or an Error on failure.
    */
   async grantModerator(
-    { targetUserId, adminSessionToken }: {
-      targetUserId: User;
-      adminSessionToken: string;
-    },
+    { targetUserId, adminSessionToken }: { targetUserId: User; adminSessionToken: string },
   ): Promise<{ success: boolean } | { error: string }> {
-    const adminSession = await this.activeSessions.findOne({
-      _id: adminSessionToken as SessionToken,
-    });
+    const adminSession = await this.activeSessions.findOne({ _id: adminSessionToken as SessionToken });
     if (!adminSession) {
       return { error: "Invalid admin session" };
     }
@@ -281,15 +280,11 @@ export default class UserAuthConcept {
     const adminUser = await this.users.findOne({ _id: adminSession.userId });
     if (!adminUser) {
       // Data inconsistency. Clean up session.
-      await this.activeSessions.deleteOne({
-        _id: adminSessionToken as SessionToken,
-      });
+      await this.activeSessions.deleteOne({ _id: adminSessionToken as SessionToken });
       return { error: "Admin user not found for session" };
     }
 
-    // Allow self-granting or require moderator privileges
-    const isSelfGrant = adminUser._id === targetUserId;
-    if (!isSelfGrant && !adminUser.canModerate) {
+    if (!adminUser.canModerate) {
       return { error: "Admin user does not have moderator privileges" };
     }
 
@@ -303,7 +298,6 @@ export default class UserAuthConcept {
       return { success: true };
     }
 
-    // Grant moderator privileges
     await this.users.updateOne(
       { _id: targetUserId },
       { $set: { canModerate: true } },
@@ -320,14 +314,9 @@ export default class UserAuthConcept {
    * **effect** sets canModerate to false for targetUser, returns true on success, or an Error on failure.
    */
   async revokeModerator(
-    { targetUserId, adminSessionToken }: {
-      targetUserId: User;
-      adminSessionToken: string;
-    },
+    { targetUserId, adminSessionToken }: { targetUserId: User; adminSessionToken: string },
   ): Promise<{ success: boolean } | { error: string }> {
-    const adminSession = await this.activeSessions.findOne({
-      _id: adminSessionToken as SessionToken,
-    });
+    const adminSession = await this.activeSessions.findOne({ _id: adminSessionToken as SessionToken });
     if (!adminSession) {
       return { error: "Invalid admin session" };
     }
@@ -335,9 +324,7 @@ export default class UserAuthConcept {
     const adminUser = await this.users.findOne({ _id: adminSession.userId });
     if (!adminUser) {
       // Data inconsistency. Clean up session.
-      await this.activeSessions.deleteOne({
-        _id: adminSessionToken as SessionToken,
-      });
+      await this.activeSessions.deleteOne({ _id: adminSessionToken as SessionToken });
       return { error: "Admin user not found for session" };
     }
 
@@ -415,3 +402,4 @@ export default class UserAuthConcept {
     return [{ isModerator: user.canModerate }];
   }
 }
+```

@@ -1,635 +1,1401 @@
-import { assertEquals } from "jsr:@std/assert";
-import { testDb } from "@utils/database.ts";
+import { assert, assertEquals, assertNotEquals } from "jsr:@std/assert";
+import { freshID, testDb } from "@utils/database.ts";
 import { ID } from "@utils/types.ts";
-import { freshID } from "@utils/database.ts"; // For generating IDs in manual mocks
 import UserAuthConcept from "./UserAuthConcept.ts";
 
 // Helper for checking if a result is an error
 const isError = (result: any): result is { error: string } =>
   result && typeof result === "object" && "error" in result;
 
-// Principle: users must register and log in before contributing; moderators can verify content
-Deno.test("Principle: Users must register, log in, and moderators can verify content", async () => {
-  console.log("\n=== Testing Principle Fulfillment ===");
+Deno.test("Principle: users must register and log in before contributing; moderators can verify content", async (t) => {
+  console.log(
+    "\n=== Principle Test: Users register, log in, and moderation flow ===",
+  );
   const [db, client] = await testDb();
   const concept = new UserAuthConcept(db);
 
   try {
-    // Setup: Create an admin user
-    console.log("\n[SETUP] Registering principle_admin...");
-    const principleAdminRegResult = await concept.registerUser({
-      username: "principle_admin",
-      password: "admin_pass",
-    });
-    console.log("  Result:", principleAdminRegResult);
-    assertEquals(
-      isError(principleAdminRegResult),
-      false,
-      "Admin registration should succeed.",
-    );
-    const principleAdminId = (principleAdminRegResult as { userId: ID })
-      .userId;
-    console.log(`  ✓ Admin registered with ID: ${principleAdminId}`);
+    let user1Id: ID;
+    let user1SessionToken: ID;
+    let adminId: ID;
+    let adminSessionToken: ID;
 
-    // Manually set as moderator (no bootstrap action exists)
-    console.log("\n[SETUP] Manually granting moderator status to admin...");
-    await concept.users.updateOne(
-      { _id: principleAdminId },
-      { $set: { canModerate: true } },
-    );
-    const adminStatus = await concept._isModerator({
-      userId: principleAdminId,
+    await t.step("1. Register User1", async () => {
+      console.log("\n[ACTION] Registering user1 (Alice)");
+      const registerResult = await concept.registerUser({
+        username: "Alice",
+        password: "password123",
+      });
+      console.log("  Output:", registerResult);
+      assertEquals(
+        isError(registerResult),
+        false,
+        "Registration should succeed",
+      );
+      user1Id = (registerResult as { userId: ID }).userId;
+      assert(user1Id, "User1 ID should be returned");
+      console.log(`  ✓ Alice registered with ID: ${user1Id}`);
     });
-    assertEquals(
-      (adminStatus as any)[0].isModerator,
-      true,
-      "Admin should be a moderator.",
-    );
-    console.log("  ✓ Admin is now a moderator");
 
-    // 1. Register User "Contributor"
-    console.log("\n[ACTION] registerUser - contributor");
-    console.log('  Input: { username: "contributor", password: "pass" }');
-    const contributorRegResult = await concept.registerUser({
-      username: "contributor",
-      password: "pass",
+    await t.step("2. Register Admin User", async () => {
+      console.log("\n[ACTION] Registering admin user (Bob)");
+      const registerResult = await concept.registerUser({
+        username: "BobAdmin",
+        password: "adminPassword",
+      });
+      console.log("  Output:", registerResult);
+      assertEquals(
+        isError(registerResult),
+        false,
+        "Admin registration should succeed",
+      );
+      adminId = (registerResult as { userId: ID }).userId;
+      assert(adminId, "Admin ID should be returned");
+      console.log(`  ✓ BobAdmin registered with ID: ${adminId}`);
     });
-    console.log("  Output:", contributorRegResult);
-    assertEquals(isError(contributorRegResult), false);
-    const contributorId = (contributorRegResult as { userId: ID }).userId;
-    console.log(`  ✓ Contributor registered with ID: ${contributorId}`);
 
-    // 2. Register User "ModeratorCandidate"
-    console.log("\n[ACTION] registerUser - moderator_candidate");
+    await t.step("3. Log in User1", async () => {
+      console.log("\n[ACTION] Alice attempts to log in");
+      const loginResult = await concept.login({
+        username: "Alice",
+        password: "password123",
+      });
+      console.log("  Output:", loginResult);
+      assertEquals(isError(loginResult), false, "Alice login should succeed");
+      user1SessionToken = (loginResult as { sessionToken: ID }).sessionToken;
+      assert(user1SessionToken, "Alice's session token should be returned");
+      console.log(`  ✓ Alice logged in with session: ${user1SessionToken}`);
+    });
+
+    await t.step(
+      "4. Log in Admin User and grant moderator privilege to themselves",
+      async () => {
+        console.log("\n[ACTION] BobAdmin attempts to log in");
+        const loginResult = await concept.login({
+          username: "BobAdmin",
+          password: "adminPassword",
+        });
+        console.log("  Output:", loginResult);
+        assertEquals(isError(loginResult), false, "Admin login should succeed");
+        adminSessionToken = (loginResult as { sessionToken: ID }).sessionToken;
+        assert(adminSessionToken, "Admin's session token should be returned");
+        console.log(
+          `  ✓ BobAdmin logged in with session: ${adminSessionToken}`,
+        );
+
+        console.log("\n[ACTION] BobAdmin grants themselves moderator status");
+        const grantSelfModResult = await concept.grantModerator({
+          targetUserId: adminId,
+          adminSessionToken: adminSessionToken,
+        });
+        console.log("  Output:", grantSelfModResult);
+        assertEquals(
+          isError(grantSelfModResult),
+          false,
+          "Admin granting self-moderator should succeed",
+        );
+        assertEquals(
+          (grantSelfModResult as { success: boolean }).success,
+          true,
+          "Admin should successfully grant self-moderator",
+        );
+
+        console.log("\n[QUERY] Verify BobAdmin is a moderator");
+        const adminIsModerator = await concept._isModerator({
+          userId: adminId,
+        });
+        console.log("  Output:", adminIsModerator);
+        assertEquals(isError(adminIsModerator), false);
+        assertEquals(
+          (adminIsModerator as { isModerator: boolean }[])[0].isModerator,
+          true,
+          "BobAdmin should now be a moderator",
+        );
+        console.log("  ✓ BobAdmin is confirmed as a moderator");
+      },
+    );
+
+    await t.step(
+      "5. User1 (non-moderator) attempts to grant moderator status (should fail)",
+      async () => {
+        console.log(
+          "\n[ACTION] Alice (non-moderator) attempts to grant moderator status to someone",
+        );
+        const grantResult = await concept.grantModerator({
+          targetUserId: freshID(), // some dummy ID
+          adminSessionToken: user1SessionToken,
+        });
+        console.log("  Output:", grantResult);
+        assertEquals(
+          isError(grantResult),
+          true,
+          "Non-moderator should not be able to grant moderator",
+        );
+        assertEquals(
+          (grantResult as { error: string }).error,
+          "Admin user does not have moderator privileges",
+          "Error message should indicate lack of privileges",
+        );
+        console.log(
+          "  ✓ Alice correctly prevented from granting moderator status",
+        );
+      },
+    );
+
+    await t.step("6. Admin grants moderator privilege to User1", async () => {
+      console.log("\n[ACTION] BobAdmin grants Alice moderator status");
+      const grantResult = await concept.grantModerator({
+        targetUserId: user1Id,
+        adminSessionToken: adminSessionToken,
+      });
+      console.log("  Output:", grantResult);
+      assertEquals(
+        isError(grantResult),
+        false,
+        "Admin should be able to grant moderator",
+      );
+      assertEquals(
+        (grantResult as { success: boolean }).success,
+        true,
+        "Grant moderator action should succeed",
+      );
+
+      console.log("\n[QUERY] Verify Alice is now a moderator");
+      const aliceIsModerator = await concept._isModerator({ userId: user1Id });
+      console.log("  Output:", aliceIsModerator);
+      assertEquals(isError(aliceIsModerator), false);
+      assertEquals(
+        (aliceIsModerator as { isModerator: boolean }[])[0].isModerator,
+        true,
+        "Alice should now be a moderator",
+      );
+      console.log("  ✓ Alice is confirmed as a moderator");
+    });
+
+    await t.step(
+      "7. User1 (now moderator) attempts to revoke moderator status (should succeed)",
+      async () => {
+        console.log(
+          "\n[ACTION] Alice (now moderator) revokes BobAdmin's moderator status",
+        );
+        const revokeResult = await concept.revokeModerator({
+          targetUserId: adminId,
+          adminSessionToken: user1SessionToken,
+        });
+        console.log("  Output:", revokeResult);
+        assertEquals(
+          isError(revokeResult),
+          false,
+          "Alice (now moderator) should be able to revoke",
+        );
+        assertEquals(
+          (revokeResult as { success: boolean }).success,
+          true,
+          "Revoke moderator action should succeed",
+        );
+
+        console.log("\n[QUERY] Verify BobAdmin is no longer a moderator");
+        const bobIsModerator = await concept._isModerator({ userId: adminId });
+        console.log("  Output:", bobIsModerator);
+        assertEquals(isError(bobIsModerator), false);
+        assertEquals(
+          (bobIsModerator as { isModerator: boolean }[])[0].isModerator,
+          false,
+          "BobAdmin should no longer be a moderator",
+        );
+        console.log("  ✓ BobAdmin is confirmed as no longer a moderator");
+      },
+    );
+
+    await t.step("8. User1 logs out", async () => {
+      console.log("\n[ACTION] Alice logs out");
+      const logoutResult = await concept.logout({
+        sessionToken: user1SessionToken,
+      });
+      console.log("  Output:", logoutResult);
+      assertEquals(
+        (logoutResult as { success: boolean }).success,
+        true,
+        "Logout should succeed",
+      );
+
+      console.log("\n[QUERY] Verify Alice's session is invalidated");
+      const authenticatedUser = await concept.getAuthenticatedUser({
+        sessionToken: user1SessionToken,
+      });
+      console.log("  Output:", authenticatedUser);
+      assertEquals(
+        authenticatedUser.userProfile,
+        null,
+        "User should not be authenticated after logout",
+      );
+      console.log("  ✓ Alice's session invalidated");
+    });
+
     console.log(
-      '  Input: { username: "moderator_candidate", password: "pass" }',
-    );
-    const modCandidateRegResult = await concept.registerUser({
-      username: "moderator_candidate",
-      password: "pass",
-    });
-    console.log("  Output:", modCandidateRegResult);
-    assertEquals(isError(modCandidateRegResult), false);
-    const modCandidateId = (modCandidateRegResult as { userId: ID }).userId;
-    console.log(
-      `  ✓ Moderator candidate registered with ID: ${modCandidateId}`,
-    );
-
-    // 3. Login Contributor
-    console.log("\n[ACTION] login - contributor");
-    console.log('  Input: { username: "contributor", password: "pass" }');
-    const contributorLoginResult = await concept.login({
-      username: "contributor",
-      password: "pass",
-    });
-    console.log("  Output:", contributorLoginResult);
-    assertEquals(isError(contributorLoginResult), false);
-    assertEquals(
-      (contributorLoginResult as { userId: ID }).userId,
-      contributorId,
-      "Contributor login successful.",
-    );
-    console.log(`  ✓ Contributor logged in successfully`);
-
-    // 4. Login ModeratorCandidate (not yet a moderator)
-    console.log("\n[ACTION] login - moderator_candidate");
-    console.log(
-      '  Input: { username: "moderator_candidate", password: "pass" }',
-    );
-    const modCandidateLoginResult = await concept.login({
-      username: "moderator_candidate",
-      password: "pass",
-    });
-    console.log("  Output:", modCandidateLoginResult);
-    assertEquals(isError(modCandidateLoginResult), false);
-    assertEquals(
-      (modCandidateLoginResult as { userId: ID }).userId,
-      modCandidateId,
-      "Moderator Candidate login successful.",
-    );
-    console.log(`  ✓ Moderator candidate logged in successfully`);
-
-    // 5. Admin grants moderator status to ModeratorCandidate
-    console.log("\n[ACTION] grantModerator");
-    console.log(
-      `  Input: { targetUserId: ${modCandidateId}, adminUserId: ${principleAdminId} }`,
-    );
-    const grantResult = await concept.grantModerator({
-      targetUserId: modCandidateId,
-      adminUserId: principleAdminId,
-    });
-    console.log("  Output:", grantResult);
-    assertEquals(
-      isError(grantResult),
-      false,
-      "Grant moderator should succeed.",
-    );
-    console.log(`  ✓ Moderator privileges granted successfully`);
-
-    // 6. Verify ModeratorCandidate is now a moderator
-    console.log("\n[QUERY] _isModerator");
-    console.log(`  Input: { userId: ${modCandidateId} }`);
-    const isModCandidateMod = await concept._isModerator({
-      userId: modCandidateId,
-    });
-    console.log("  Output:", isModCandidateMod);
-    assertEquals(isError(isModCandidateMod), false);
-    assertEquals(
-      (isModCandidateMod as any)[0].isModerator,
-      true,
-      "Moderator Candidate should now be a moderator.",
-    );
-    console.log(`  ✓ Verified: User is now a moderator`);
-
-    console.log(
-      "\n✅ Principle demonstrated: Users can register, log in, and moderators can verify content",
+      "\n✅ Principle demonstrated: Users can register and log in. Moderator privileges can be managed by authenticated moderators.",
     );
   } finally {
     await client.close();
   }
 });
 
-Deno.test("Action: registerUser successfully registers users and enforces requirements", async () => {
+Deno.test("Action: registerUser - ensures unique usernames, non-empty passwords", async (t) => {
   console.log("\n=== Testing registerUser Action ===");
   const [db, client] = await testDb();
   const concept = new UserAuthConcept(db);
 
   try {
-    // Should register a user successfully
-    console.log("\n[TEST] Register a user successfully");
-    console.log('  Input: { username: "alice", password: "password123" }');
-    const result = await concept.registerUser({
-      username: "alice",
-      password: "password123",
+    const username = "testuser";
+    const password = "securepassword";
+
+    await t.step("Successful registration", async () => {
+      console.log(
+        `\n[ACTION] registerUser({ username: "${username}", password: "${password}" })`,
+      );
+      const result = await concept.registerUser({ username, password });
+      console.log("  Output:", result);
+      assertEquals(isError(result), false, "Registration should succeed");
+      assert((result as { userId: ID }).userId, "User ID should be returned");
+      console.log(`  ✓ User "${username}" registered successfully.`);
+
+      const user = await concept.users.findOne({ username });
+      assert(user, "User should exist in database");
+      assertEquals(user.username, username, "Username should match");
+      assertEquals(
+        user.canModerate,
+        false,
+        "Default canModerate should be false",
+      );
+      console.log("  ✓ User details verified in DB.");
     });
-    console.log("  Output:", result);
-    assertEquals(
-      isError(result),
-      false,
-      "Registration should not return an error.",
-    );
-    const { userId } = result as { userId: ID };
-    assertEquals(typeof userId, "string", "User ID should be a string.");
-    console.log(`  ✓ User registered successfully with ID: ${userId}`);
 
-    // Verify user details
-    console.log("\n[VERIFY] Check user details with _getUserDetails");
-    console.log(`  Input: { userId: ${userId} }`);
-    const userDetails = await concept._getUserDetails({ userId });
-    console.log("  Output:", userDetails);
-    assertEquals(
-      isError(userDetails),
-      false,
-      "Should retrieve user details.",
-    );
-    if (isError(userDetails)) return;
-    assertEquals(
-      userDetails[0].user.username,
-      "alice",
-      "Username should match.",
-    );
-    assertEquals(
-      userDetails[0].user.canModerate,
-      false,
-      "canModerate should be false by default.",
-    );
-    console.log(
-      `  ✓ User details verified: username='alice', canModerate=false`,
-    );
-
-    // Should prevent registration with empty password
-    console.log("\n[TEST] Prevent registration with empty password");
-    console.log('  Input: { username: "bob", password: "" }');
-    const emptyPasswordResult = await concept.registerUser({
-      username: "bob",
-      password: "",
+    await t.step("Rejection of duplicate username", async () => {
+      console.log(
+        `\n[ACTION] registerUser({ username: "${username}", password: "${password}" }) (duplicate attempt)`,
+      );
+      const result = await concept.registerUser({ username, password });
+      console.log("  Output:", result);
+      assertEquals(isError(result), true, "Duplicate registration should fail");
+      assertEquals(
+        (result as { error: string }).error,
+        "Username already taken",
+        "Error message should indicate duplicate username",
+      );
+      console.log(`  ✓ Duplicate username "${username}" rejected.`);
     });
-    console.log("  Output:", emptyPasswordResult);
-    assertEquals(
-      isError(emptyPasswordResult),
-      true,
-      "Should return an error for empty password.",
-    );
-    assertEquals(
-      (emptyPasswordResult as { error: string }).error,
-      "Password cannot be empty",
-      "Error message should indicate empty password.",
-    );
-    console.log(`  ✓ Correctly rejected empty password`);
 
-    // Should prevent registration with duplicate username
-    console.log("\n[TEST] Prevent registration with duplicate username");
-    console.log('  Step 1: Register "charlie"');
-    console.log('  Input: { username: "charlie", password: "password123" }');
-    const charlieResult = await concept.registerUser({
-      username: "charlie",
-      password: "password123",
+    await t.step("Rejection of empty password", async () => {
+      console.log(
+        `\n[ACTION] registerUser({ username: "nopass", password: "" })`,
+      );
+      const result = await concept.registerUser({
+        username: "nopass",
+        password: "",
+      });
+      console.log("  Output:", result);
+      assertEquals(
+        isError(result),
+        true,
+        "Empty password registration should fail",
+      );
+      assertEquals(
+        (result as { error: string }).error,
+        "Password cannot be empty",
+        "Error message should indicate empty password",
+      );
+      console.log("  ✓ Empty password rejected.");
     });
-    console.log("  Output:", charlieResult);
-    assertEquals(
-      isError(charlieResult),
-      false,
-      "First registration should succeed.",
-    );
-    console.log(`  ✓ First registration succeeded`);
-
-    console.log('  Step 2: Try to register "charlie" again');
-    console.log(
-      '  Input: { username: "charlie", password: "anotherpassword" }',
-    );
-    const duplicateCharlieResult = await concept.registerUser({
-      username: "charlie",
-      password: "anotherpassword",
-    });
-    console.log("  Output:", duplicateCharlieResult);
-    assertEquals(
-      isError(duplicateCharlieResult),
-      true,
-      "Should return an error for duplicate username.",
-    );
-    assertEquals(
-      (duplicateCharlieResult as { error: string }).error,
-      "Username already taken",
-      "Error message should indicate duplicate username.",
-    );
-    console.log(`  ✓ Correctly rejected duplicate username`);
-
-    console.log("\n✅ All registerUser requirements verified");
   } finally {
     await client.close();
   }
 });
 
-Deno.test("Action: login allows valid users and rejects invalid credentials", async () => {
+Deno.test("Action: login - handles correct/incorrect credentials", async (t) => {
   console.log("\n=== Testing login Action ===");
   const [db, client] = await testDb();
   const concept = new UserAuthConcept(db);
 
+  const username = "loginuser";
+  const password = "loginpassword";
+  let userId: ID;
+
   try {
-    const testUsername = "diana";
-    const testPassword = "securepassword";
+    // Setup: Register a user first
+    const registerResult = await concept.registerUser({ username, password });
+    userId = (registerResult as { userId: ID }).userId;
+    console.log(`[SETUP] Registered user: ${username} (ID: ${userId})`);
 
-    // Setup: Register user
-    console.log("\n[SETUP] Register user for login tests");
-    console.log(
-      `  Input: { username: "${testUsername}", password: "${testPassword}" }`,
-    );
-    const registerResult = await concept.registerUser({
-      username: testUsername,
-      password: testPassword,
+    await t.step("Successful login with correct credentials", async () => {
+      console.log(
+        `\n[ACTION] login({ username: "${username}", password: "${password}" })`,
+      );
+      const loginResult = await concept.login({ username, password });
+      console.log("  Output:", loginResult);
+      assertEquals(isError(loginResult), false, "Login should succeed");
+      assert(
+        (loginResult as { sessionToken: ID }).sessionToken,
+        "Session token should be returned",
+      );
+      console.log(`  ✓ User "${username}" logged in successfully.`);
+
+      // Verify session exists in DB
+      const session = await concept.activeSessions.findOne({
+        _id: (loginResult as { sessionToken: ID }).sessionToken,
+      });
+      assert(session, "Session should exist in DB");
+      assertEquals(
+        session.userId,
+        userId,
+        "Session should be linked to correct user",
+      );
+      console.log("  ✓ Session verified in DB.");
     });
-    console.log("  Output:", registerResult);
-    assertEquals(isError(registerResult), false);
-    const dianaId = (registerResult as { userId: ID }).userId;
-    console.log(`  ✓ User registered with ID: ${dianaId}`);
 
-    // Should allow a user to login successfully
-    console.log("\n[TEST] Login with valid credentials");
-    console.log(
-      `  Input: { username: "${testUsername}", password: "${testPassword}" }`,
-    );
-    const loginResult = await concept.login({
-      username: testUsername,
-      password: testPassword,
+    await t.step("Rejection with incorrect password", async () => {
+      console.log(
+        `\n[ACTION] login({ username: "${username}", password: "wrongpassword" })`,
+      );
+      const loginResult = await concept.login({
+        username,
+        password: "wrongpassword",
+      });
+      console.log("  Output:", loginResult);
+      assertEquals(
+        isError(loginResult),
+        true,
+        "Login with wrong password should fail",
+      );
+      assertEquals(
+        (loginResult as { error: string }).error,
+        "Invalid username or password",
+        "Error message should indicate invalid credentials",
+      );
+      console.log("  ✓ Login with incorrect password rejected.");
     });
-    console.log("  Output:", loginResult);
-    assertEquals(isError(loginResult), false, "Login should succeed.");
-    assertEquals(
-      (loginResult as { userId: ID }).userId,
-      dianaId,
-      "Returned userId should match registered userId.",
-    );
-    console.log(`  ✓ Login successful, returned userId: ${dianaId}`);
 
-    // Should prevent login with incorrect password
-    console.log("\n[TEST] Reject login with incorrect password");
-    console.log(
-      `  Input: { username: "${testUsername}", password: "wrongpassword" }`,
-    );
-    const wrongPasswordResult = await concept.login({
-      username: testUsername,
-      password: "wrongpassword",
+    await t.step("Rejection with non-existent username", async () => {
+      console.log(
+        `\n[ACTION] login({ username: "nonexistent", password: "${password}" })`,
+      );
+      const loginResult = await concept.login({
+        username: "nonexistent",
+        password: password,
+      });
+      console.log("  Output:", loginResult);
+      assertEquals(
+        isError(loginResult),
+        true,
+        "Login with non-existent username should fail",
+      );
+      assertEquals(
+        (loginResult as { error: string }).error,
+        "Invalid username or password",
+        "Error message should indicate invalid credentials",
+      );
+      console.log("  ✓ Login with non-existent username rejected.");
     });
-    console.log("  Output:", wrongPasswordResult);
-    assertEquals(
-      isError(wrongPasswordResult),
-      true,
-      "Login should fail with wrong password.",
-    );
-    assertEquals(
-      (wrongPasswordResult as { error: string }).error,
-      "Invalid username or password",
-      "Error message should indicate invalid credentials.",
-    );
-    console.log(`  ✓ Correctly rejected incorrect password`);
 
-    // Should prevent login with non-existent username
-    console.log("\n[TEST] Reject login with non-existent username");
-    console.log('  Input: { username: "eve", password: "anypassword" }');
-    const nonExistentResult = await concept.login({
-      username: "eve",
-      password: "anypassword",
+    await t.step("Multiple logins create unique sessions", async () => {
+      const loginResult1 = await concept.login({ username, password });
+      const loginResult2 = await concept.login({ username, password });
+      assertNotEquals(
+        (loginResult1 as { sessionToken: ID }).sessionToken,
+        (loginResult2 as { sessionToken: ID }).sessionToken,
+        "Multiple logins should yield unique session tokens",
+      );
+      console.log("  ✓ Multiple logins result in unique session tokens.");
     });
-    console.log("  Output:", nonExistentResult);
-    assertEquals(
-      isError(nonExistentResult),
-      true,
-      "Login should fail for non-existent user.",
-    );
-    assertEquals(
-      (nonExistentResult as { error: string }).error,
-      "Invalid username or password",
-      "Error message should indicate invalid credentials.",
-    );
-    console.log(`  ✓ Correctly rejected non-existent username`);
-
-    console.log("\n✅ All login requirements verified");
   } finally {
     await client.close();
   }
 });
 
-Deno.test("Action: grantModerator allows admins to grant privileges and enforces requirements", async () => {
+Deno.test("Action: logout - invalidates sessions", async (t) => {
+  console.log("\n=== Testing logout Action ===");
+  const [db, client] = await testDb();
+  const concept = new UserAuthConcept(db);
+
+  const username = "logoutuser";
+  const password = "logoutpassword";
+  let sessionToken: ID;
+
+  try {
+    // Setup: Register and login a user
+    await concept.registerUser({ username, password });
+    const loginResult = await concept.login({ username, password });
+    sessionToken = (loginResult as { sessionToken: ID }).sessionToken;
+    console.log(
+      `[SETUP] Logged in user: ${username} with session: ${sessionToken}`,
+    );
+
+    await t.step("Successful logout", async () => {
+      console.log(`\n[ACTION] logout({ sessionToken: "${sessionToken}" })`);
+      const logoutResult = await concept.logout({ sessionToken });
+      console.log("  Output:", logoutResult);
+      assertEquals(
+        (logoutResult as { success: boolean }).success,
+        true,
+        "Logout should succeed",
+      );
+      console.log(`  ✓ Session "${sessionToken}" successfully logged out.`);
+
+      // Verify session is no longer active
+      const activeSession = await concept.activeSessions.findOne({
+        _id: sessionToken,
+      });
+      assertEquals(
+        activeSession,
+        null,
+        "Session should be removed from activeSessions",
+      );
+      console.log("  ✓ Session removed from DB.");
+    });
+
+    await t.step(
+      "Attempt to logout with an already invalid session",
+      async () => {
+        console.log(
+          `\n[ACTION] logout({ sessionToken: "${sessionToken}" }) (already logged out)`,
+        );
+        const logoutResult = await concept.logout({ sessionToken });
+        console.log("  Output:", logoutResult);
+        assertEquals(
+          (logoutResult as { success: boolean }).success,
+          false,
+          "Logging out an invalid session should return false",
+        );
+        console.log(`  ✓ Attempt to logout invalid session handled correctly.`);
+      },
+    );
+
+    await t.step("Attempt to logout with a non-existent session", async () => {
+      const nonExistentToken = freshID();
+      console.log(
+        `\n[ACTION] logout({ sessionToken: "${nonExistentToken}" }) (non-existent)`,
+      );
+      const logoutResult = await concept.logout({
+        sessionToken: nonExistentToken,
+      });
+      console.log("  Output:", logoutResult);
+      assertEquals(
+        (logoutResult as { success: boolean }).success,
+        false,
+        "Logging out a non-existent session should return false",
+      );
+      console.log(
+        "  ✓ Attempt to logout non-existent session handled correctly.",
+      );
+    });
+  } finally {
+    await client.close();
+  }
+});
+
+Deno.test("Action: getAuthenticatedUser - retrieves user profile or null", async (t) => {
+  console.log("\n=== Testing getAuthenticatedUser Action ===");
+  const [db, client] = await testDb();
+  const concept = new UserAuthConcept(db);
+
+  const username = "authuser";
+  const password = "authpassword";
+  let userId: ID;
+  let sessionToken: ID;
+
+  try {
+    // Setup: Register and login a user
+    const registerResult = await concept.registerUser({ username, password });
+    userId = (registerResult as { userId: ID }).userId;
+    const loginResult = await concept.login({ username, password });
+    sessionToken = (loginResult as { sessionToken: ID }).sessionToken;
+    console.log(
+      `[SETUP] Registered and logged in user: ${username} (ID: ${userId}) with session: ${sessionToken}`,
+    );
+
+    await t.step("Retrieve profile for a valid session", async () => {
+      console.log(
+        `\n[ACTION] getAuthenticatedUser({ sessionToken: "${sessionToken}" })`,
+      );
+      const authResult = await concept.getAuthenticatedUser({ sessionToken });
+      console.log("  Output:", authResult);
+      assertEquals(
+        authResult.userProfile !== null,
+        true,
+        "Should return a user profile",
+      );
+      assertEquals(
+        authResult.userProfile?.userId,
+        userId,
+        "User ID should match",
+      );
+      assertEquals(
+        authResult.userProfile?.username,
+        username,
+        "Username should match",
+      );
+      assertEquals(
+        authResult.userProfile?.canModerate,
+        false,
+        "canModerate should be false by default",
+      );
+      console.log("  ✓ User profile retrieved successfully for valid session.");
+    });
+
+    await t.step("Return null for an invalid session token", async () => {
+      const invalidToken = freshID();
+      console.log(
+        `\n[ACTION] getAuthenticatedUser({ sessionToken: "${invalidToken}" }) (invalid)`,
+      );
+      const authResult = await concept.getAuthenticatedUser({
+        sessionToken: invalidToken,
+      });
+      console.log("  Output:", authResult);
+      assertEquals(
+        authResult.userProfile,
+        null,
+        "Should return null for invalid session",
+      );
+      console.log("  ✓ Correctly returned null for invalid session.");
+    });
+
+    await t.step(
+      "Return null and clean up session if user is missing but session exists (data inconsistency)",
+      async () => {
+        // Manually create a session for a non-existent user
+        const ghostSessionToken = freshID();
+        const ghostUserId = freshID();
+        await concept.activeSessions.insertOne({
+          _id: ghostSessionToken,
+          userId: ghostUserId,
+          createdAt: new Date(),
+        });
+        console.log(
+          `[SETUP] Created ghost session "${ghostSessionToken}" for non-existent user "${ghostUserId}"`,
+        );
+
+        console.log(
+          `\n[ACTION] getAuthenticatedUser({ sessionToken: "${ghostSessionToken}" }) (ghost session)`,
+        );
+        const authResult = await concept.getAuthenticatedUser({
+          sessionToken: ghostSessionToken,
+        });
+        console.log("  Output:", authResult);
+        assertEquals(
+          authResult.userProfile,
+          null,
+          "Should return null for ghost session",
+        );
+        console.log("  ✓ Correctly returned null for ghost session.");
+
+        // Verify the ghost session was cleaned up
+        const ghostSession = await concept.activeSessions.findOne({
+          _id: ghostSessionToken,
+        });
+        assertEquals(
+          ghostSession,
+          null,
+          "Ghost session should have been deleted",
+        );
+        console.log("  ✓ Ghost session cleaned up.");
+      },
+    );
+  } finally {
+    await client.close();
+  }
+});
+
+Deno.test("Action: changePassword - updates password and invalidates sessions", async (t) => {
+  console.log("\n=== Testing changePassword Action ===");
+  const [db, client] = await testDb();
+  const concept = new UserAuthConcept(db);
+
+  const username = "pwuser";
+  const oldPassword = "oldpassword";
+  const newPassword = "newpassword";
+  let userId: ID;
+  let sessionToken1: ID;
+  let sessionToken2: ID;
+
+  try {
+    // Setup: Register and login user, creating two sessions
+    const registerResult = await concept.registerUser({
+      username,
+      password: oldPassword,
+    });
+    userId = (registerResult as { userId: ID }).userId;
+
+    const loginResult1 = await concept.login({
+      username,
+      password: oldPassword,
+    });
+    sessionToken1 = (loginResult1 as { sessionToken: ID }).sessionToken;
+
+    const loginResult2 = await concept.login({
+      username,
+      password: oldPassword,
+    });
+    sessionToken2 = (loginResult2 as { sessionToken: ID }).sessionToken;
+
+    console.log(
+      `[SETUP] User "${username}" (ID: ${userId}) registered and logged in with sessions: ${sessionToken1}, ${sessionToken2}`,
+    );
+
+    await t.step(
+      "Successful password change invalidates all sessions",
+      async () => {
+        console.log(
+          `\n[ACTION] changePassword({ sessionToken: "${sessionToken1}", oldPassword: "${oldPassword}", newPassword: "${newPassword}" })`,
+        );
+        const changeResult = await concept.changePassword({
+          sessionToken: sessionToken1,
+          oldPassword,
+          newPassword,
+        });
+        console.log("  Output:", changeResult);
+        assertEquals(
+          isError(changeResult),
+          false,
+          "Password change should succeed",
+        );
+        assertEquals(
+          (changeResult as { success: boolean }).success,
+          true,
+          "Password change should report success",
+        );
+        console.log("  ✓ Password changed successfully.");
+
+        // Verify old sessions are invalidated
+        const auth1 = await concept.getAuthenticatedUser({
+          sessionToken: sessionToken1,
+        });
+        assertEquals(
+          auth1.userProfile,
+          null,
+          "Session 1 should be invalidated",
+        );
+        const auth2 = await concept.getAuthenticatedUser({
+          sessionToken: sessionToken2,
+        });
+        assertEquals(
+          auth2.userProfile,
+          null,
+          "Session 2 should be invalidated",
+        );
+        console.log("  ✓ All old sessions invalidated.");
+
+        // Verify login with new password works
+        const newLoginResult = await concept.login({
+          username,
+          password: newPassword,
+        });
+        assertEquals(
+          isError(newLoginResult),
+          false,
+          "Login with new password should succeed",
+        );
+        assert(
+          (newLoginResult as { sessionToken: ID }).sessionToken,
+          "New session token should be returned",
+        );
+        console.log("  ✓ Login with new password successful.");
+      },
+    );
+
+    await t.step("Rejection with invalid old password", async () => {
+      // Re-login to get a new session for the current password
+      const reloginResult = await concept.login({
+        username,
+        password: newPassword,
+      });
+      const currentSession =
+        (reloginResult as { sessionToken: ID }).sessionToken;
+
+      console.log(
+        `\n[ACTION] changePassword({ sessionToken: "${currentSession}", oldPassword: "wrong", newPassword: "newerpassword" })`,
+      );
+      const changeResult = await concept.changePassword({
+        sessionToken: currentSession,
+        oldPassword: "wrong",
+        newPassword: "newerpassword",
+      });
+      console.log("  Output:", changeResult);
+      assertEquals(
+        isError(changeResult),
+        true,
+        "Password change with wrong old password should fail",
+      );
+      assertEquals(
+        (changeResult as { error: string }).error,
+        "Old password does not match",
+        "Error message should indicate wrong old password",
+      );
+      console.log("  ✓ Rejected change with invalid old password.");
+    });
+
+    await t.step("Rejection with invalid session token", async () => {
+      const invalidSession = freshID();
+      console.log(
+        `\n[ACTION] changePassword({ sessionToken: "${invalidSession}", oldPassword: "${newPassword}", newPassword: "anotherpassword" })`,
+      );
+      const changeResult = await concept.changePassword({
+        sessionToken: invalidSession,
+        oldPassword: newPassword,
+        newPassword: "anotherpassword",
+      });
+      console.log("  Output:", changeResult);
+      assertEquals(
+        isError(changeResult),
+        true,
+        "Password change with invalid session should fail",
+      );
+      assertEquals(
+        (changeResult as { error: string }).error,
+        "Invalid session",
+        "Error message should indicate invalid session",
+      );
+      console.log("  ✓ Rejected change with invalid session token.");
+    });
+
+    await t.step("Rejection with empty new password", async () => {
+      // Re-login to get a new session
+      const reloginResult = await concept.login({
+        username,
+        password: newPassword,
+      });
+      const currentSession =
+        (reloginResult as { sessionToken: ID }).sessionToken;
+
+      console.log(
+        `\n[ACTION] changePassword({ sessionToken: "${currentSession}", oldPassword: "${newPassword}", newPassword: "" })`,
+      );
+      const changeResult = await concept.changePassword({
+        sessionToken: currentSession,
+        oldPassword: newPassword,
+        newPassword: "",
+      });
+      console.log("  Output:", changeResult);
+      assertEquals(
+        isError(changeResult),
+        true,
+        "Password change with empty new password should fail",
+      );
+      assertEquals(
+        (changeResult as { error: string }).error,
+        "New password cannot be empty",
+        "Error message should indicate empty new password",
+      );
+      console.log("  ✓ Rejected change with empty new password.");
+    });
+  } finally {
+    await client.close();
+  }
+});
+
+Deno.test("Action: grantModerator - assigns moderator privileges", async (t) => {
   console.log("\n=== Testing grantModerator Action ===");
   const [db, client] = await testDb();
   const concept = new UserAuthConcept(db);
 
+  const adminUser = "adminbob";
+  const regularUser = "charlie";
+  const otherUser = "diana";
+  let adminId: ID;
+  let adminSessionToken: ID;
+  let regularUserId: ID;
+  let regularUserSessionToken: ID;
+  let otherUserId: ID;
+
   try {
-    // Setup: Register users
-    console.log("\n[SETUP] Register admin user 'frank'");
-    const frankRegister = await concept.registerUser({
-      username: "frank",
-      password: "password",
+    // Setup: Register admin and regular users
+    const adminRegResult = await concept.registerUser({
+      username: adminUser,
+      password: "adminpass",
     });
-    assertEquals(isError(frankRegister), false);
-    const adminUserId = (frankRegister as { userId: ID }).userId;
-    console.log(`  ✓ Frank registered with ID: ${adminUserId}`);
+    adminId = (adminRegResult as { userId: ID }).userId;
 
-    console.log("\n[SETUP] Register target user 'grace'");
-    const graceRegister = await concept.registerUser({
-      username: "grace",
-      password: "password",
+    const regularRegResult = await concept.registerUser({
+      username: regularUser,
+      password: "regularpass",
     });
-    assertEquals(isError(graceRegister), false);
-    const targetUserId = (graceRegister as { userId: ID }).userId;
-    console.log(`  ✓ Grace registered with ID: ${targetUserId}`);
+    regularUserId = (regularRegResult as { userId: ID }).userId;
 
-    console.log("\n[SETUP] Register non-mod user 'heidi'");
-    const heidiRegister = await concept.registerUser({
-      username: "heidi",
-      password: "password",
+    const otherRegResult = await concept.registerUser({
+      username: otherUser,
+      password: "otherpass",
     });
-    assertEquals(isError(heidiRegister), false);
-    const nonModUserId = (heidiRegister as { userId: ID }).userId;
-    console.log(`  ✓ Heidi registered with ID: ${nonModUserId}`);
+    otherUserId = (otherRegResult as { userId: ID }).userId;
 
-    // Manually set 'frank' as moderator
-    console.log("\n[SETUP] Manually grant frank moderator status");
-    await concept.users.updateOne(
-      { _id: adminUserId },
-      { $set: { canModerate: true } },
-    );
-    const frankStatus = await concept._isModerator({ userId: adminUserId });
-    assertEquals(
-      (frankStatus as any)[0].isModerator,
-      true,
-      "Frank should be a moderator.",
-    );
-    console.log(`  ✓ Frank is now a moderator`);
+    // Login admin and grant themselves moderator status
+    const adminLoginResult = await concept.login({
+      username: adminUser,
+      password: "adminpass",
+    });
+    adminSessionToken = (adminLoginResult as { sessionToken: ID }).sessionToken;
+    await concept.grantModerator({
+      targetUserId: adminId,
+      adminSessionToken,
+    }); // Admin self-grants mod status
 
-    // Should allow an admin to grant moderator privileges
-    console.log("\n[TEST] Admin grants moderator privileges to target user");
+    // Login regular user (for attempts to grant later)
+    const regularLoginResult = await concept.login({
+      username: regularUser,
+      password: "regularpass",
+    });
+    regularUserSessionToken =
+      (regularLoginResult as { sessionToken: ID }).sessionToken;
+
     console.log(
-      `  Input: { targetUserId: ${targetUserId}, adminUserId: ${adminUserId} }`,
+      `[SETUP] Admin user "${adminUser}" (ID: ${adminId}) is a moderator.`,
     );
-    const grantResult = await concept.grantModerator({
-      targetUserId,
-      adminUserId,
-    });
-    console.log("  Output:", grantResult);
-    assertEquals(
-      isError(grantResult),
-      false,
-      "Grant moderator should succeed.",
-    );
-    console.log(`  ✓ Grant moderator succeeded`);
-
-    console.log("\n[VERIFY] Check target user is now a moderator");
-    console.log(`  Input: { userId: ${targetUserId} }`);
-    const isGraceMod = await concept._isModerator({ userId: targetUserId });
-    console.log("  Output:", isGraceMod);
-    assertEquals(isError(isGraceMod), false);
-    assertEquals(
-      (isGraceMod as any)[0].isModerator,
-      true,
-      "Target user should now be a moderator.",
-    );
-    console.log(`  ✓ Target user is now a moderator`);
-
-    // Should prevent non-moderator from granting privileges
-    console.log("\n[TEST] Reject grant by non-moderator");
     console.log(
-      `  Input: { targetUserId: ${targetUserId}, adminUserId: ${nonModUserId} }`,
+      `[SETUP] Regular user "${regularUser}" (ID: ${regularUserId}) is NOT a moderator.`,
     );
-    const nonModGrantResult = await concept.grantModerator({
-      targetUserId,
-      adminUserId: nonModUserId,
-    });
-    console.log("  Output:", nonModGrantResult);
-    assertEquals(
-      isError(nonModGrantResult),
-      true,
-      "Grant moderator by non-mod should fail.",
-    );
-    assertEquals(
-      (nonModGrantResult as { error: string }).error,
-      "Admin user does not have moderator privileges",
-      "Error message should indicate insufficient privileges.",
-    );
-    console.log(`  ✓ Correctly rejected non-moderator attempt`);
 
-    // Should prevent granting privileges by non-existent admin
-    console.log("\n[TEST] Reject grant by non-existent admin");
-    const fakeAdminId = freshID();
-    console.log(
-      `  Input: { targetUserId: ${targetUserId}, adminUserId: ${fakeAdminId} }`,
-    );
-    const fakeAdminGrantResult = await concept.grantModerator({
-      targetUserId,
-      adminUserId: fakeAdminId,
-    });
-    console.log("  Output:", fakeAdminGrantResult);
-    assertEquals(
-      isError(fakeAdminGrantResult),
-      true,
-      "Should fail for non-existent admin.",
-    );
-    assertEquals(
-      (fakeAdminGrantResult as { error: string }).error,
-      "Admin user not found",
-      "Error message should indicate admin not found.",
-    );
-    console.log(`  ✓ Correctly rejected non-existent admin`);
+    await t.step("Successful grant by admin to regular user", async () => {
+      console.log(
+        `\n[ACTION] Admin grants moderator to "${regularUser}" (ID: ${regularUserId})`,
+      );
+      const grantResult = await concept.grantModerator({
+        targetUserId: regularUserId,
+        adminSessionToken,
+      });
+      console.log("  Output:", grantResult);
+      assertEquals(
+        isError(grantResult),
+        false,
+        "Grant moderator should succeed",
+      );
+      assertEquals(
+        (grantResult as { success: boolean }).success,
+        true,
+        "Grant moderator should report success",
+      );
 
-    // Should prevent granting privileges to non-existent target user
-    console.log("\n[TEST] Reject grant to non-existent target user");
-    const fakeTargetId = freshID();
-    console.log(
-      `  Input: { targetUserId: ${fakeTargetId}, adminUserId: ${adminUserId} }`,
-    );
-    const fakeTargetGrantResult = await concept.grantModerator({
-      targetUserId: fakeTargetId,
-      adminUserId,
+      const isMod = await concept._isModerator({ userId: regularUserId });
+      assertEquals(isError(isMod), false);
+      assertEquals(
+        (isMod as { isModerator: boolean }[])[0].isModerator,
+        true,
+        "Regular user should now be a moderator",
+      );
+      console.log(`  ✓ "${regularUser}" is now a moderator.`);
     });
-    console.log("  Output:", fakeTargetGrantResult);
-    assertEquals(
-      isError(fakeTargetGrantResult),
-      true,
-      "Should fail for non-existent target user.",
-    );
-    assertEquals(
-      (fakeTargetGrantResult as { error: string }).error,
-      "Target user not found",
-      "Error message should indicate target user not found.",
-    );
-    console.log(`  ✓ Correctly rejected non-existent target user`);
 
-    console.log("\n✅ All grantModerator requirements verified");
+    await t.step(
+      "Idempotency: Granting moderator twice to same user",
+      async () => {
+        console.log(
+          `\n[ACTION] Admin grants moderator to "${regularUser}" again`,
+        );
+        const grantResult = await concept.grantModerator({
+          targetUserId: regularUserId,
+          adminSessionToken,
+        });
+        console.log("  Output:", grantResult);
+        assertEquals(
+          isError(grantResult),
+          false,
+          "Grant moderator (idempotent) should succeed",
+        );
+        assertEquals(
+          (grantResult as { success: boolean }).success,
+          true,
+          "Idempotent grant should report success",
+        );
+        console.log(`  ✓ Granting twice has no negative effect.`);
+      },
+    );
+
+    await t.step(
+      "Success: Moderator user can grant moderator to another user",
+      async () => {
+        console.log(
+          `\n[ACTION] "${regularUser}" (now moderator) grants moderator to "${otherUser}"`,
+        );
+        const grantResult = await concept.grantModerator({
+          targetUserId: otherUserId,
+          adminSessionToken: regularUserSessionToken,
+        });
+        console.log("  Output:", grantResult);
+        assertEquals(
+          isError(grantResult),
+          false,
+          "Moderator should be able to grant moderator",
+        );
+        assertEquals(
+          (grantResult as { success: boolean }).success,
+          true,
+          "Grant moderator should succeed",
+        );
+        const isOtherMod = await concept._isModerator({ userId: otherUserId });
+        assertEquals(isError(isOtherMod), false);
+        assertEquals(
+          (isOtherMod as { isModerator: boolean }[])[0].isModerator,
+          true,
+          "Other user should now be a moderator",
+        );
+        console.log(
+          `  ✓ Moderator "${regularUser}" successfully granted privileges.`,
+        );
+      },
+    );
+
+    await t.step("Rejection: Invalid admin session token", async () => {
+      const invalidToken = freshID();
+      console.log(
+        `\n[ACTION] Grant with invalid admin session token`,
+      );
+      const grantResult = await concept.grantModerator({
+        targetUserId: otherUserId,
+        adminSessionToken: invalidToken,
+      });
+      console.log("  Output:", grantResult);
+      assertEquals(
+        isError(grantResult),
+        true,
+        "Grant with invalid session should fail",
+      );
+      assertEquals(
+        (grantResult as { error: string }).error,
+        "Invalid admin session",
+        "Error message should indicate invalid admin session",
+      );
+      console.log(`  ✓ Invalid admin session token rejected.`);
+    });
+
+    await t.step("Rejection: Non-existent target user", async () => {
+      const nonExistentUser = freshID();
+      console.log(
+        `\n[ACTION] Admin grants moderator to non-existent user "${nonExistentUser}"`,
+      );
+      const grantResult = await concept.grantModerator({
+        targetUserId: nonExistentUser,
+        adminSessionToken,
+      });
+      console.log("  Output:", grantResult);
+      assertEquals(
+        isError(grantResult),
+        true,
+        "Grant to non-existent user should fail",
+      );
+      assertEquals(
+        (grantResult as { error: string }).error,
+        "Target user not found",
+        "Error message should indicate target user not found",
+      );
+      console.log(`  ✓ Non-existent target user rejected.`);
+    });
   } finally {
     await client.close();
   }
 });
 
-Deno.test("Queries: _getUserDetails and _isModerator retrieve correct information", async () => {
-  console.log("\n=== Testing Query Operations ===");
+Deno.test("Action: revokeModerator - removes moderator privileges", async (t) => {
+  console.log("\n=== Testing revokeModerator Action ===");
   const [db, client] = await testDb();
   const concept = new UserAuthConcept(db);
 
+  const adminUser = "superadmin";
+  const modUser = "modjane";
+  const nonModUser = "frank";
+  let adminId: ID;
+  let adminSessionToken: ID;
+  let modUserId: ID;
+  let modUserSessionToken: ID;
+  let nonModUserId: ID;
+
   try {
-    const queryUsername = "irene";
-    const queryPassword = "querypass";
+    // Setup: Register admin, moderator, and non-mod users
+    const adminRegResult = await concept.registerUser({
+      username: adminUser,
+      password: "superpass",
+    });
+    adminId = (adminRegResult as { userId: ID }).userId;
 
-    // Setup: Register user
-    console.log("\n[SETUP] Register user for query tests");
+    const modRegResult = await concept.registerUser({
+      username: modUser,
+      password: "modpass",
+    });
+    modUserId = (modRegResult as { userId: ID }).userId;
+
+    const nonModRegResult = await concept.registerUser({
+      username: nonModUser,
+      password: "frankpass",
+    });
+    nonModUserId = (nonModRegResult as { userId: ID }).userId;
+
+    // Login admin and grant themselves moderator status
+    const adminLoginResult = await concept.login({
+      username: adminUser,
+      password: "superpass",
+    });
+    adminSessionToken = (adminLoginResult as { sessionToken: ID }).sessionToken;
+    await concept.grantModerator({ targetUserId: adminId, adminSessionToken });
+
+    // Admin grants mod status to modUser
+    await concept.grantModerator({
+      targetUserId: modUserId,
+      adminSessionToken,
+    });
+    const modLoginResult = await concept.login({
+      username: modUser,
+      password: "modpass",
+    });
+    modUserSessionToken = (modLoginResult as { sessionToken: ID }).sessionToken;
+
     console.log(
-      `  Input: { username: "${queryUsername}", password: "${queryPassword}" }`,
-    );
-    const registerResult = await concept.registerUser({
-      username: queryUsername,
-      password: queryPassword,
-    });
-    console.log("  Output:", registerResult);
-    assertEquals(isError(registerResult), false);
-    const ireneId = (registerResult as { userId: ID }).userId;
-    console.log(`  ✓ User registered with ID: ${ireneId}`);
-
-    // Should retrieve user details for an existing user
-    console.log("\n[TEST] Query _getUserDetails for existing user");
-    console.log(`  Input: { userId: ${ireneId} }`);
-    const userDetails = await concept._getUserDetails({ userId: ireneId });
-    console.log("  Output:", userDetails);
-    assertEquals(isError(userDetails), false, "Query should succeed.");
-    if (isError(userDetails)) return;
-    assertEquals(
-      userDetails.length,
-      1,
-      "Should return exactly one user detail.",
-    );
-    assertEquals(
-      userDetails[0].user.username,
-      queryUsername,
-      "Username in details should match.",
-    );
-    assertEquals(
-      userDetails[0].user.canModerate,
-      false,
-      "canModerate in details should be false.",
+      `[SETUP] Admin user "${adminUser}" (ID: ${adminId}) is a moderator.`,
     );
     console.log(
-      `  ✓ User details retrieved: username='${queryUsername}', canModerate=false`,
+      `[SETUP] Moderator user "${modUser}" (ID: ${modUserId}) is a moderator.`,
+    );
+    console.log(
+      `[SETUP] Non-moderator user "${nonModUser}" (ID: ${nonModUserId}) is NOT a moderator.`,
     );
 
-    // Should return error for non-existent user details
-    console.log("\n[TEST] Query _getUserDetails for non-existent user");
-    const fakeId = freshID();
-    console.log(`  Input: { userId: ${fakeId} }`);
-    const fakeUserDetails = await concept._getUserDetails({ userId: fakeId });
-    console.log("  Output:", fakeUserDetails);
-    assertEquals(
-      isError(fakeUserDetails),
-      true,
-      "Query should return an error.",
-    );
-    assertEquals(
-      (fakeUserDetails as { error: string }).error,
-      "User not found",
-      "Error message should indicate user not found.",
-    );
-    console.log(`  ✓ Correctly returned error for non-existent user`);
+    await t.step("Successful revoke by admin of a moderator", async () => {
+      console.log(
+        `\n[ACTION] Admin revokes moderator status from "${modUser}" (ID: ${modUserId})`,
+      );
+      const revokeResult = await concept.revokeModerator({
+        targetUserId: modUserId,
+        adminSessionToken,
+      });
+      console.log("  Output:", revokeResult);
+      assertEquals(
+        isError(revokeResult),
+        false,
+        "Revoke moderator should succeed",
+      );
+      assertEquals(
+        (revokeResult as { success: boolean }).success,
+        true,
+        "Revoke moderator should report success",
+      );
 
-    // Should correctly report moderator status for regular user
-    console.log("\n[TEST] Query _isModerator for regular user");
-    console.log(`  Input: { userId: ${ireneId} }`);
-    const isIreneMod = await concept._isModerator({ userId: ireneId });
-    console.log("  Output:", isIreneMod);
-    assertEquals(isError(isIreneMod), false);
-    assertEquals(
-      (isIreneMod as any)[0].isModerator,
-      false,
-      "Irene should not be a moderator.",
-    );
-    console.log(`  ✓ Correctly reported isModerator=false for regular user`);
-
-    // Should correctly report moderator status for a moderator
-    console.log("\n[TEST] Query _isModerator for moderator user");
-    console.log("  Setup: Register and promote a moderator");
-    const localAdminRegResult = await concept.registerUser({
-      username: "local_admin_for_query_test",
-      password: "password",
+      const isMod = await concept._isModerator({ userId: modUserId });
+      assertEquals(isError(isMod), false);
+      assertEquals(
+        (isMod as { isModerator: boolean }[])[0].isModerator,
+        false,
+        "Moderator user should no longer be a moderator",
+      );
+      console.log(`  ✓ "${modUser}" is no longer a moderator.`);
     });
-    assertEquals(
-      isError(localAdminRegResult),
-      false,
-      "Local admin registration should succeed.",
+
+    await t.step(
+      "Idempotency: Revoking moderator twice from same user",
+      async () => {
+        console.log(
+          `\n[ACTION] Admin revokes moderator status from "${modUser}" again`,
+        );
+        const revokeResult = await concept.revokeModerator({
+          targetUserId: modUserId,
+          adminSessionToken,
+        });
+        console.log("  Output:", revokeResult);
+        assertEquals(
+          isError(revokeResult),
+          false,
+          "Revoke moderator (idempotent) should succeed",
+        );
+        assertEquals(
+          (revokeResult as { success: boolean }).success,
+          true,
+          "Idempotent revoke should report success",
+        );
+        console.log(`  ✓ Revoking twice has no negative effect.`);
+      },
     );
-    const localAdminId = (localAdminRegResult as { userId: ID }).userId;
-    await concept.users.updateOne({ _id: localAdminId }, {
-      $set: { canModerate: true },
+
+    await t.step(
+      "Success: Moderator user can revoke another moderator",
+      async () => {
+        // Re-grant mod status to modUser for this test
+        await concept.grantModerator({
+          targetUserId: modUserId,
+          adminSessionToken,
+        });
+        const currentModStatus = await concept._isModerator({
+          userId: modUserId,
+        });
+        assertEquals(
+          (currentModStatus as { isModerator: boolean }[])[0].isModerator,
+          true,
+          "[SETUP CHECK] ModUser is moderator again",
+        );
+
+        console.log(
+          `\n[ACTION] "${modUser}" (moderator) revokes "${adminUser}"'s moderator status`,
+        );
+        const revokeResult = await concept.revokeModerator({
+          targetUserId: adminId,
+          adminSessionToken: modUserSessionToken,
+        });
+        console.log("  Output:", revokeResult);
+        assertEquals(
+          isError(revokeResult),
+          false,
+          "Moderator should be able to revoke moderator",
+        );
+        assertEquals(
+          (revokeResult as { success: boolean }).success,
+          true,
+          "Revoke moderator should succeed",
+        );
+        const isAdminMod = await concept._isModerator({ userId: adminId });
+        assertEquals(isError(isAdminMod), false);
+        assertEquals(
+          (isAdminMod as { isModerator: boolean }[])[0].isModerator,
+          false,
+          "Admin should no longer be a moderator",
+        );
+        console.log(
+          `  ✓ Moderator "${modUser}" successfully revoked privileges.`,
+        );
+      },
+    );
+
+    await t.step("Rejection: Invalid admin session token", async () => {
+      const invalidToken = freshID();
+      console.log(
+        `\n[ACTION] Revoke with invalid admin session token`,
+      );
+      const revokeResult = await concept.revokeModerator({
+        targetUserId: modUserId,
+        adminSessionToken: invalidToken,
+      });
+      console.log("  Output:", revokeResult);
+      assertEquals(
+        isError(revokeResult),
+        true,
+        "Revoke with invalid session should fail",
+      );
+      assertEquals(
+        (revokeResult as { error: string }).error,
+        "Invalid admin session",
+        "Error message should indicate invalid admin session",
+      );
+      console.log(`  ✓ Invalid admin session token rejected.`);
     });
-    console.log(`  ✓ Moderator user created with ID: ${localAdminId}`);
 
-    console.log(`  Input: { userId: ${localAdminId} }`);
-    const isLocalAdminMod = await concept._isModerator({
-      userId: localAdminId,
+    await t.step("Rejection: Non-existent target user", async () => {
+      // Re-grant moderator status to admin for this test (was revoked in previous step)
+      await concept.grantModerator({
+        targetUserId: adminId,
+        adminSessionToken: modUserSessionToken,
+      });
+
+      const nonExistentUser = freshID();
+      console.log(
+        `\n[ACTION] Admin revokes moderator from non-existent user "${nonExistentUser}"`,
+      );
+      const revokeResult = await concept.revokeModerator({
+        targetUserId: nonExistentUser,
+        adminSessionToken,
+      });
+      console.log("  Output:", revokeResult);
+      assertEquals(
+        isError(revokeResult),
+        true,
+        "Revoke from non-existent user should fail",
+      );
+      assertEquals(
+        (revokeResult as { error: string }).error,
+        "Target user not found",
+        "Error message should indicate target user not found",
+      );
+      console.log(`  ✓ Non-existent target user rejected.`);
     });
-    console.log("  Output:", isLocalAdminMod);
-    assertEquals(isError(isLocalAdminMod), false);
-    assertEquals(
-      (isLocalAdminMod as any)[0].isModerator,
-      true,
-      "Local Admin should be a moderator.",
-    );
-    console.log(`  ✓ Correctly reported isModerator=true for moderator`);
+  } finally {
+    await client.close();
+  }
+});
 
-    // Should return error for non-existent user moderator status
-    console.log("\n[TEST] Query _isModerator for non-existent user");
-    const fakeModId = freshID();
-    console.log(`  Input: { userId: ${fakeModId} }`);
-    const isModResult = await concept._isModerator({ userId: fakeModId });
-    console.log("  Output:", isModResult);
-    assertEquals(
-      isError(isModResult),
-      true,
-      "Query should return an error.",
-    );
-    assertEquals(
-      (isModResult as { error: string }).error,
-      "User not found",
-      "Error message should indicate user not found.",
-    );
-    console.log(`  ✓ Correctly returned error for non-existent user`);
+Deno.test("Query: _getUserDetails - retrieves user profile", async (t) => {
+  console.log("\n=== Testing _getUserDetails Query ===");
+  const [db, client] = await testDb();
+  const concept = new UserAuthConcept(db);
 
-    console.log("\n✅ All query operations verified");
+  const username = "detailuser";
+  const password = "detailpassword";
+  let userId: ID;
+
+  try {
+    // Setup: Register a user
+    const registerResult = await concept.registerUser({ username, password });
+    userId = (registerResult as { userId: ID }).userId;
+    console.log(`[SETUP] Registered user: ${username} (ID: ${userId})`);
+
+    await t.step("Retrieve details for an existing user", async () => {
+      console.log(`\n[QUERY] _getUserDetails({ userId: "${userId}" })`);
+      const detailsResult = await concept._getUserDetails({ userId });
+      console.log("  Output:", detailsResult);
+      assertEquals(isError(detailsResult), false, "Query should succeed");
+      assert(Array.isArray(detailsResult), "Result should be an array");
+      assertEquals(
+        detailsResult.length,
+        1,
+        "Result array should contain one item",
+      );
+      assertEquals(
+        detailsResult[0].user.username,
+        username,
+        "Username should match",
+      );
+      assertEquals(
+        detailsResult[0].user.canModerate,
+        false,
+        "canModerate should be false by default",
+      );
+      console.log("  ✓ User details retrieved successfully.");
+    });
+
+    await t.step("Return error for a non-existent user", async () => {
+      const nonExistentId = freshID();
+      console.log(
+        `\n[QUERY] _getUserDetails({ userId: "${nonExistentId}" }) (non-existent)`,
+      );
+      const detailsResult = await concept._getUserDetails({
+        userId: nonExistentId,
+      });
+      console.log("  Output:", detailsResult);
+      assertEquals(
+        isError(detailsResult),
+        true,
+        "Query for non-existent user should return error",
+      );
+      assertEquals(
+        (detailsResult as { error: string }).error,
+        "User not found",
+        "Error message should indicate user not found",
+      );
+      console.log("  ✓ Correctly returned error for non-existent user.");
+    });
+  } finally {
+    await client.close();
+  }
+});
+
+Deno.test("Query: _isModerator - checks moderator status", async (t) => {
+  console.log("\n=== Testing _isModerator Query ===");
+  const [db, client] = await testDb();
+  const concept = new UserAuthConcept(db);
+
+  const regularUser = "regular";
+  const moderatorUser = "moderator";
+  let regularUserId: ID;
+  let moderatorUserId: ID;
+  let adminSessionToken: ID; // Need an admin to set moderator status
+
+  try {
+    // Setup: Register users and an admin
+    const regularRegResult = await concept.registerUser({
+      username: regularUser,
+      password: "pass",
+    });
+    regularUserId = (regularRegResult as { userId: ID }).userId;
+
+    const modRegResult = await concept.registerUser({
+      username: moderatorUser,
+      password: "pass",
+    });
+    moderatorUserId = (modRegResult as { userId: ID }).userId;
+
+    const adminRegResult = await concept.registerUser({
+      username: "adminuser",
+      password: "adminpass",
+    });
+    const adminId = (adminRegResult as { userId: ID }).userId;
+    const adminLoginResult = await concept.login({
+      username: "adminuser",
+      password: "adminpass",
+    });
+    adminSessionToken = (adminLoginResult as { sessionToken: ID }).sessionToken;
+    await concept.grantModerator({ targetUserId: adminId, adminSessionToken }); // Admin self-grants
+
+    // Admin grants moderator status to moderatorUser
+    await concept.grantModerator({
+      targetUserId: moderatorUserId,
+      adminSessionToken,
+    });
+
+    console.log(`[SETUP] Regular user "${regularUser}" (ID: ${regularUserId})`);
+    console.log(
+      `[SETUP] Moderator user "${moderatorUser}" (ID: ${moderatorUserId})`,
+    );
+
+    await t.step(
+      "Check moderator status for a regular user (should be false)",
+      async () => {
+        console.log(`\n[QUERY] _isModerator({ userId: "${regularUserId}" })`);
+        const isModResult = await concept._isModerator({
+          userId: regularUserId,
+        });
+        console.log("  Output:", isModResult);
+        assertEquals(isError(isModResult), false, "Query should succeed");
+        assert(Array.isArray(isModResult), "Result should be an array");
+        assertEquals(
+          isModResult.length,
+          1,
+          "Result array should contain one item",
+        );
+        assertEquals(
+          (isModResult as { isModerator: boolean }[])[0].isModerator,
+          false,
+          "Regular user should not be a moderator",
+        );
+        console.log(
+          "  ✓ Correctly identified regular user as not a moderator.",
+        );
+      },
+    );
+
+    await t.step(
+      "Check moderator status for a moderator user (should be true)",
+      async () => {
+        console.log(`\n[QUERY] _isModerator({ userId: "${moderatorUserId}" })`);
+        const isModResult = await concept._isModerator({
+          userId: moderatorUserId,
+        });
+        console.log("  Output:", isModResult);
+        assertEquals(isError(isModResult), false, "Query should succeed");
+        assert(Array.isArray(isModResult), "Result should be an array");
+        assertEquals(
+          isModResult.length,
+          1,
+          "Result array should contain one item",
+        );
+        assertEquals(
+          (isModResult as { isModerator: boolean }[])[0].isModerator,
+          true,
+          "Moderator user should be a moderator",
+        );
+        console.log("  ✓ Correctly identified moderator user as a moderator.");
+      },
+    );
+
+    await t.step("Return error for a non-existent user", async () => {
+      const nonExistentId = freshID();
+      console.log(
+        `\n[QUERY] _isModerator({ userId: "${nonExistentId}" }) (non-existent)`,
+      );
+      const isModResult = await concept._isModerator({
+        userId: nonExistentId,
+      });
+      console.log("  Output:", isModResult);
+      assertEquals(
+        isError(isModResult),
+        true,
+        "Query for non-existent user should return error",
+      );
+      assertEquals(
+        (isModResult as { error: string }).error,
+        "User not found",
+        "Error message should indicate user not found",
+      );
+      console.log("  ✓ Correctly returned error for non-existent user.");
+    });
   } finally {
     await client.close();
   }

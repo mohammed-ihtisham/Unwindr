@@ -64,3 +64,23 @@ As I refined it, I started focusing on making contradiction handling more flexib
 [Updating Interest Filter Iteration 2](../../../context/src/concepts/InterestFilter/InterestFilterConcept.ts/20251017_215628.5e7ce4df.md)
 
 [Updating Interest Filter Iteration 3](../../../context/src/concepts/InterestFilter/InterestFilterConcept.ts/20251017_221020.7d4758bd.md)
+
+### 6. Realizing Missing Reverse Actions While Using the LLM Context Tool
+
+While experimenting with the LLM context tool to enhance my UserAuth concept, I realized that some of my actions only worked in one direction. For example, users could log in, but there wasn’t a corresponding way to log out. Similarly, if I could grant moderator privileges, there should logically be a way to revoke them. The LLM’s contextual reasoning helped me see these gaps — it didn’t just improve the code but made me think more deeply about conceptual completeness and symmetry. I also added a “change password” feature as a small but meaningful touch, improving both usability and security. This process reminded me that designing authentication systems isn’t just about functionality — it’s about ensuring every action has an intentional and reversible counterpart.
+
+[Original UserAuth Concept](../context/design/concepts/UserAuth/UserAuth.md/steps/_.40f860ec.md)
+
+[LLM Enhanced UserAuth Concept](../context/design/concepts/UserAuth/UserAuth.md/steps/_.314e55a6.md)
+
+### 7. Struggling to Edit Existing Code with the LLM
+
+When I tried updating the existing UserAuth code to include my new adjustments, the process turned out to be a lot more painful than expected. The LLM wasn’t great at editing existing files — it often introduced new errors or rewrote working sections in ways that broke the logic. Small changes, like adding logout or revoke actions, sometimes caused cascading syntax issues or missing imports that took time to track down. It ended up being an iterative process where I had to fix, re-prompt, and test multiple times before things finally worked smoothly. This experience showed me that while LLMs are powerful for generating new code, they still struggle with fine-grained edits in existing structures — especially when context or dependencies are complex.
+
+[Error Filled LLM Updates to Implementation](../context/design/concepts/UserAuth/implementation.md/steps/response.e5e3da79.md)
+
+<!-- The following are snapshots of iterations of trying to fix the new errors -->
+
+[text](../context/design/concepts/UserAuth/testing.md/steps/response.cd718cf8.md)
+[text](../context/design/concepts/UserAuth/testing.md/steps/response.cedf9316.md)
+[text](../context/design/concepts/UserAuth/testing.md/steps/response.e5e3da79.md)[text](../context/design/concepts/UserAuth/testing.md/steps/response.e8f94249.md)[text](../context/design/concepts/UserAuth/testing.md/steps/response.eea3a485.md)
