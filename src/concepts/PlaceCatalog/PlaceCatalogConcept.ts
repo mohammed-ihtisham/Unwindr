@@ -184,14 +184,18 @@ export default class PlaceCatalogConcept {
   }
 
   /**
-   * verifyPlace (placeId: Id, moderatorId: Id): Empty | {error: string}
+   * setPlaceVerificationStatus (placeId: Id, moderatorId: Id, isVerified: Boolean): Empty | {error: string}
    *
-   * **requires** place exists and user has moderation privileges (assumed here)
+   * **requires** user has moderation privileges and place exists
    *
-   * **effects** marks the specified place as verified.
+   * **effects** sets the verification status of the place (true for verified, false for unverified/deactivated).
    */
-  async verifyPlace(
-    { placeId, moderatorId }: { placeId: ID; moderatorId: User },
+  async setPlaceVerificationStatus(
+    { placeId, moderatorId, isVerified }: {
+      placeId: ID;
+      moderatorId: User;
+      isVerified: boolean;
+    },
   ): Promise<Empty | { error: string }> {
     // Assume moderatorId implies moderation privileges; actual check by sync
     if (!moderatorId) {
@@ -200,15 +204,18 @@ export default class PlaceCatalogConcept {
 
     const result = await this.places.updateOne(
       { _id: placeId },
-      { $set: { verified: true } },
+      { $set: { verified: isVerified } },
     );
 
     if (result.matchedCount === 0) {
       return { error: `Place with ID ${placeId} not found.` };
     }
     if (result.modifiedCount === 0) {
-      // Place already verified or no change
-      return { error: `Place with ID ${placeId} is already verified.` };
+      // Place already has this verification status
+      return {
+        error:
+          `Place with ID ${placeId} already has verification status: ${isVerified}.`,
+      };
     }
 
     return {};

@@ -12,8 +12,8 @@ import { ID } from "@utils/types.ts";
 const isError = (result: unknown): result is { error: string } =>
   result !== null && typeof result === "object" && "error" in result;
 
-// Principle: users can add, verify, and update places; system can seed from provider
-Deno.test("Principle: Users can add, verify, and update places; system can seed from provider", async () => {
+// Principle: users can add, set verification status, and update places; system can seed from provider
+Deno.test("Principle: Users can add, set verification status, and update places; system can seed from provider", async () => {
   console.log("\n=== Testing Principle Fulfillment ===");
   const [db, client] = await testDb();
   const placeCatalog = new PlaceCatalogConcept(db);
@@ -98,14 +98,15 @@ Deno.test("Principle: Users can add, verify, and update places; system can seed 
 
     // Step 3: Users (with moderation privileges) can verify places
     console.log(
-      "\n[ACTION] verifyPlace - Moderator verifies the user-added place",
+      "\n[ACTION] setPlaceVerificationStatus - Moderator verifies the user-added place",
     );
     console.log(
-      `  Input: { placeId: ${addedPlaceId}, moderatorId: ${traceModerator} }`,
+      `  Input: { placeId: ${addedPlaceId}, moderatorId: ${traceModerator}, isVerified: true }`,
     );
-    const verifyResult = await placeCatalog.verifyPlace({
+    const verifyResult = await placeCatalog.setPlaceVerificationStatus({
       placeId: addedPlaceId,
       moderatorId: traceModerator,
+      isVerified: true,
     });
     console.log("  Output:", verifyResult);
     assertEquals(isError(verifyResult), false, "Place should be verified.");
@@ -182,7 +183,7 @@ Deno.test("Principle: Users can add, verify, and update places; system can seed 
     );
 
     console.log(
-      "\n✅ Principle demonstrated: Users can add, verify, and update places; system can seed from provider",
+      "\n✅ Principle demonstrated: Users can add, set verification status, and update places; system can seed from provider",
     );
   } finally {
     await client.close();
@@ -429,8 +430,8 @@ Deno.test("Action: addPlace successfully adds places and enforces requirements",
   }
 });
 
-Deno.test("Action: verifyPlace allows moderators to verify places and enforces requirements", async () => {
-  console.log("\n=== Testing verifyPlace Action ===");
+Deno.test("Action: setPlaceVerificationStatus allows moderators to set verification status and enforces requirements", async () => {
+  console.log("\n=== Testing setPlaceVerificationStatus Action ===");
   const [db, client] = await testDb();
   const placeCatalog = new PlaceCatalogConcept(db);
 
@@ -452,7 +453,7 @@ Deno.test("Action: verifyPlace allows moderators to verify places and enforces r
     console.log(`  ✓ Place added with ID: ${userAddedPlaceId}`);
 
     // Should successfully verify an unverified place
-    console.log("\n[TEST] Verify an unverified place successfully");
+    console.log("\n[TEST] Set verification status to true (verified)");
     const beforeVerify = await placeCatalog.places.findOne({
       _id: userAddedPlaceId,
     });
@@ -464,11 +465,12 @@ Deno.test("Action: verifyPlace allows moderators to verify places and enforces r
     console.log("  ✓ Place is currently unverified");
 
     console.log(
-      `  Input: { placeId: ${userAddedPlaceId}, moderatorId: ${testModerator} }`,
+      `  Input: { placeId: ${userAddedPlaceId}, moderatorId: ${testModerator}, isVerified: true }`,
     );
-    const result = await placeCatalog.verifyPlace({
+    const result = await placeCatalog.setPlaceVerificationStatus({
       placeId: userAddedPlaceId,
       moderatorId: testModerator,
+      isVerified: true,
     });
     console.log("  Output:", result);
     assertEquals(
@@ -489,15 +491,47 @@ Deno.test("Action: verifyPlace allows moderators to verify places and enforces r
     );
     console.log("  ✓ Place is now verified");
 
-    // Should fail to verify a non-existent place
-    console.log("\n[TEST] Reject verifying non-existent place");
+    // Should successfully unverify/deactivate a verified place
+    console.log(
+      "\n[TEST] Set verification status to false (unverified/deactivated)",
+    );
+    console.log(
+      `  Input: { placeId: ${userAddedPlaceId}, moderatorId: ${testModerator}, isVerified: false }`,
+    );
+    const unverifyResult = await placeCatalog.setPlaceVerificationStatus({
+      placeId: userAddedPlaceId,
+      moderatorId: testModerator,
+      isVerified: false,
+    });
+    console.log("  Output:", unverifyResult);
+    assertEquals(
+      isError(unverifyResult),
+      false,
+      "Unverification should succeed.",
+    );
+    console.log("  ✓ Place unverification action performed");
+
+    console.log("\n[VERIFY] Check place is now unverified");
+    const afterUnverify = await placeCatalog.places.findOne({
+      _id: userAddedPlaceId,
+    });
+    assertEquals(
+      afterUnverify?.verified,
+      false,
+      "Place should be marked as unverified after action.",
+    );
+    console.log("  ✓ Place is now unverified");
+
+    // Should fail to set status on a non-existent place
+    console.log("\n[TEST] Reject setting status on non-existent place");
     const nonExistentId = freshID();
     console.log(
-      `  Input: { placeId: ${nonExistentId}, moderatorId: ${testModerator} }`,
+      `  Input: { placeId: ${nonExistentId}, moderatorId: ${testModerator}, isVerified: true }`,
     );
-    const resultNotFound = await placeCatalog.verifyPlace({
+    const resultNotFound = await placeCatalog.setPlaceVerificationStatus({
       placeId: nonExistentId,
       moderatorId: testModerator,
+      isVerified: true,
     });
     console.log("  Output:", resultNotFound);
     assertEquals(
@@ -512,34 +546,40 @@ Deno.test("Action: verifyPlace allows moderators to verify places and enforces r
     );
     console.log("  ✓ Correctly rejected non-existent place");
 
-    // Should fail to verify an already verified place
-    console.log("\n[TEST] Reject verifying already verified place");
+    // Should fail to set status when place already has that status
     console.log(
-      `  Input: { placeId: ${userAddedPlaceId}, moderatorId: ${testModerator} }`,
+      "\n[TEST] Reject setting status when place already has that status",
     );
-    const resultAlreadyVerified = await placeCatalog.verifyPlace({
+    console.log(
+      `  Input: { placeId: ${userAddedPlaceId}, moderatorId: ${testModerator}, isVerified: false }`,
+    );
+    const resultAlreadySet = await placeCatalog.setPlaceVerificationStatus({
       placeId: userAddedPlaceId,
       moderatorId: testModerator,
+      isVerified: false,
     });
-    console.log("  Output:", resultAlreadyVerified);
+    console.log("  Output:", resultAlreadySet);
     assertEquals(
-      isError(resultAlreadyVerified),
+      isError(resultAlreadySet),
       true,
-      "Should return error for already verified place.",
+      "Should return error for place that already has that status.",
     );
     assertEquals(
-      (resultAlreadyVerified as { error: string }).error,
-      `Place with ID ${userAddedPlaceId} is already verified.`,
-      "Error message should indicate already verified.",
+      (resultAlreadySet as { error: string }).error,
+      `Place with ID ${userAddedPlaceId} already has verification status: false.`,
+      "Error message should indicate status already set.",
     );
-    console.log("  ✓ Correctly rejected already verified place");
+    console.log("  ✓ Correctly rejected setting same status");
 
-    // Should fail to verify with no moderatorId
-    console.log("\n[TEST] Reject verifying with no moderatorId");
-    console.log(`  Input: { placeId: ${userAddedPlaceId}, moderatorId: "" }`);
-    const resultNoModerator = await placeCatalog.verifyPlace({
+    // Should fail to set status with no moderatorId
+    console.log("\n[TEST] Reject setting status with no moderatorId");
+    console.log(
+      `  Input: { placeId: ${userAddedPlaceId}, moderatorId: "", isVerified: true }`,
+    );
+    const resultNoModerator = await placeCatalog.setPlaceVerificationStatus({
       placeId: userAddedPlaceId,
       moderatorId: "" as ID,
+      isVerified: true,
     });
     console.log("  Output:", resultNoModerator);
     assertEquals(
@@ -554,7 +594,7 @@ Deno.test("Action: verifyPlace allows moderators to verify places and enforces r
     );
     console.log("  ✓ Correctly rejected missing moderatorId");
 
-    console.log("\n✅ All verifyPlace requirements verified");
+    console.log("\n✅ All setPlaceVerificationStatus requirements verified");
   } finally {
     await client.close();
   }
@@ -858,8 +898,8 @@ Deno.test("Query: _getPlacesInArea retrieves places within specified area and en
   }
 });
 
-Deno.test("Query: _getPlaceDetails retrieves correct place information and enforces requirements", async () => {
-  console.log("\n=== Testing _getPlaceDetails Query ===");
+Deno.test("Action: getPlace retrieves correct place information and enforces requirements", async () => {
+  console.log("\n=== Testing getPlace Action ===");
   const [db, client] = await testDb();
   const placeCatalog = new PlaceCatalogConcept(db);
 
@@ -881,9 +921,10 @@ Deno.test("Query: _getPlaceDetails retrieves correct place information and enfor
     console.log(`  ✓ Place added with ID: ${userAddedPlaceId}`);
 
     console.log("\n[SETUP] Verify the place");
-    await placeCatalog.verifyPlace({
+    await placeCatalog.setPlaceVerificationStatus({
       placeId: userAddedPlaceId,
       moderatorId: testModerator,
+      isVerified: true,
     });
     console.log("  ✓ Place verified");
 
@@ -969,7 +1010,7 @@ Deno.test("Query: _getPlaceDetails retrieves correct place information and enfor
     );
     console.log("  ✓ Correctly rejected empty placeId");
 
-    console.log("\n✅ All _getPlaceDetails requirements verified");
+    console.log("\n✅ All getPlace requirements verified");
   } finally {
     await client.close();
   }

@@ -1,4 +1,6 @@
-[text](../../../context/design/concepts/PlaceCatalog/PlaceCatalog.md/steps/_.41cfdb5e.md)
+[Original Spec](../../../context/design/concepts/PlaceCatalog/PlaceCatalog.md/steps/_.41cfdb5e.md)
+
+[Enhancements to Spec](../../../context/design/brainstorming/questioning.md/steps/response.576021f1.md)
 
 concept PlaceCatalog [User]
 purpose manage discoverable places and their basic data
@@ -28,9 +30,9 @@ actions
     requires user is authenticated and name is not empty and coordinates are valid
     effect creates user-added place
   
-  verifyPlace (placeId: Id, moderatorId: Id)
-    requires user has moderation privileges
-    effect marks place as verified
+  setPlaceVerificationStatus (placeId: Id, moderatorId: Id, isVerified: Boolean)
+    requires user has moderation privileges and place exists
+    effect sets the verification status of the place (true for verified, false for unverified/deactivated)
   
   updatePlace (placeId: Id, name: String, address: String, userId: Id)
     requires place exists and user is authenticated

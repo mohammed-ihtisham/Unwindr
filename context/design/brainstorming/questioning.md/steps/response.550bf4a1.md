@@ -1,6 +1,8 @@
-# Prompt: Add or update anything in the PlaceCatalog concept to make sure it is 100% complete for bare-minimum functionality for an MVP?
-
-[@PlaceCatalog-spec](../concepts/PlaceCatalog/PlaceCatalog.md)
+---
+timestamp: 'Sat Oct 18 2025 21:23:21 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251018_212321.012a797b.md]]'
+content_id: 550bf4a1e6dbed591d3c86debc30823a8777e0546c11d6f52a1d5740eab3a03c
+---
 
 # response:
 
@@ -8,8 +10,8 @@ To make the `PlaceCatalog` concept 100% complete for bare-minimum MVP functional
 
 Here are the proposed updates:
 
-1.  **Add `getPlace` action:** The current `getPlacesInArea` action returns only a set of `Id`s. For a user to actually *view* a place, they need to retrieve its full details (name, address, category, location, etc.). This is a critical missing piece for MVP.
-2.  **Modify `verifyPlace` to `setPlaceVerificationStatus`:** The existing `verifyPlace` action only allows setting `verified` to `true`. For data quality and moderation, it's essential to also be able to mark a place as `unverified` (e.g., if it's found to be inaccurate, spam, or no longer exists). This provides a soft-deletion mechanism for problematic entries, which is sufficient for an MVP.
+1. **Add `getPlace` action:** The current `getPlacesInArea` action returns only a set of `Id`s. For a user to actually *view* a place, they need to retrieve its full details (name, address, category, location, etc.). This is a critical missing piece for MVP.
+2. **Modify `verifyPlace` to `setPlaceVerificationStatus`:** The existing `verifyPlace` action only allows setting `verified` to `true`. For data quality and moderation, it's essential to also be able to mark a place as `unverified` (e.g., if it's found to be inaccurate, spam, or no longer exists). This provides a soft-deletion mechanism for problematic entries, which is sufficient for an MVP.
 
 ```diff
 concept PlaceCatalog [User]
