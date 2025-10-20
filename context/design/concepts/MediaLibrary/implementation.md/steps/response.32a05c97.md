@@ -1,14 +1,8 @@
-[@concept-design-overview](../../background/concept-design-overview.md)
-
-[@concept-specifications](../../background/concept-specifications.md)
-
-[@implementing-concepts](../../background/implementing-concepts.md)
-
-[@MediaLibrary-spec](MediaLibrary.md)
-
-[Current Implementation](../../../src/concepts/MediaLibrary/MediaLibraryConcept.ts)
-
-# implement: Update MediaLibrary using the new MediaLibrary-spec (added Delete action)
+---
+timestamp: 'Sun Oct 19 2025 17:18:52 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251019_171852.ab01840c.md]]'
+content_id: 32a05c97821577ed4a63a84a0a40ddeec0c13f0cec1c4f8b6d6325092f32f7a0
+---
 
 # response:
 

@@ -1,7 +1,8 @@
-# Prompt: Add or update anything in the MediaLibrary concept to make sure it is 100% complete for bare-minimum functionality for an MVP?
-
-[@MediaLibrary-spec](../concepts/MediaLibrary/MediaLibrary.md)
-
+---
+timestamp: 'Sun Oct 19 2025 17:13:27 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251019_171327.a1774331.md]]'
+content_id: bc341f8d0bc48187c0ab12b5fa4ad06f2f0fa6aa438b9550ba496c23e229f9c8
+---
 
 # response:
 
@@ -51,12 +52,12 @@ Here's the updated `MediaLibrary` concept:
 
 **Reasoning for Changes:**
 
-1.  **`state.contributorId` clarification:** Added a comment to clarify the relationship between `contributorId` and `source`, which helps in understanding how media items are attributed.
-2.  **`seedMedia` and `addMedia` effect clarification:** Explicitly mentioned how `source` and `contributorId` are set by these actions for clarity.
-3.  **`getMediaByPlace` update:**
-    *   **Return Type:** Changed from `set Id` to `set { _id: Id, imageUrl: String, createdAt: Date, source: String }`. For "visual discovery," the caller *needs* the `imageUrl` and other display-relevant metadata immediately. Returning just IDs would necessitate subsequent calls for each item, making it inefficient and incomplete for direct display.
-    *   **Pagination:** Added `limit` and `offset` parameters. For any "discovery" feature that might involve many items, returning an unbounded set is not scalable or performant. Pagination is a bare-minimum requirement for displaying lists effectively in an MVP.
-4.  **`deleteMedia` action added:**
-    *   While not strictly part of "discovery," the ability for users to *add* media (via `addMedia`) implies a need for basic control over their contributions. For an MVP, allowing a user to delete their own media is a critical safeguard against accidental uploads or inappropriate content, and a common user expectation for user-generated content features.
+1. **`state.contributorId` clarification:** Added a comment to clarify the relationship between `contributorId` and `source`, which helps in understanding how media items are attributed.
+2. **`seedMedia` and `addMedia` effect clarification:** Explicitly mentioned how `source` and `contributorId` are set by these actions for clarity.
+3. **`getMediaByPlace` update:**
+   * **Return Type:** Changed from `set Id` to `set { _id: Id, imageUrl: String, createdAt: Date, source: String }`. For "visual discovery," the caller *needs* the `imageUrl` and other display-relevant metadata immediately. Returning just IDs would necessitate subsequent calls for each item, making it inefficient and incomplete for direct display.
+   * **Pagination:** Added `limit` and `offset` parameters. For any "discovery" feature that might involve many items, returning an unbounded set is not scalable or performant. Pagination is a bare-minimum requirement for displaying lists effectively in an MVP.
+4. **`deleteMedia` action added:**
+   * While not strictly part of "discovery," the ability for users to *add* media (via `addMedia`) implies a need for basic control over their contributions. For an MVP, allowing a user to delete their own media is a critical safeguard against accidental uploads or inappropriate content, and a common user expectation for user-generated content features.
 
 These changes ensure the `MediaLibrary` can store, retrieve, and display media efficiently for visual discovery, and provides essential basic management for user-contributed content, fulfilling the "bare-minimum functionality for an MVP."

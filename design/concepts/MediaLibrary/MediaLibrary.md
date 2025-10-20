@@ -1,7 +1,6 @@
-
-[text](../../../context/design/concepts/MediaLibrary/MediaLibrary.md/steps/_.e11c2373.md)
-
 # MediaLibrary Concept
+
+[text](../../../context/design/brainstorming/questioning.md/steps/response.bc341f8d.md)
 
 concept MediaLibrary [User, Place]
 purpose store and retrieve media items for visual discovery
@@ -11,7 +10,7 @@ state
   a set of MediaItems with
     an _id Id
     a placeId Id
-    a contributorId Id
+    a contributorId Id // userId if source is "user", otherwise system/null
     a createdAt Date
     an imageUrl String
     a source String // "provider" | "user"
@@ -19,11 +18,15 @@ state
 actions
   seedMedia (placeId: Id, urls: set String) : (count: Number)
     requires urls not empty
-    effect inserts provider-sourced media items
+    effect inserts provider-sourced media items, setting source to "provider"
 
   addMedia (userId: Id, placeId: Id, imageUrl: String) : (mediaId: Id)
     requires userId valid and imageUrl non-empty
-    effect adds user-contributed media
+    effect adds user-contributed media, setting source to "user" and contributorId to userId
+
+  deleteMedia (userId: Id, mediaId: Id) : (success: Boolean)
+    requires mediaId exists and userId matches contributorId of mediaId
+    effect removes media item from the set
 
   getMediaByPlace (placeId: Id) : (mediaIds: set Id)
     requires placeId provided
