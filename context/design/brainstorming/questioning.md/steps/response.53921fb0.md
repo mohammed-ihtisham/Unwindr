@@ -1,14 +1,16 @@
-# Prompt: Add or update anything in the MediaAnalytics concept to make sure it is 100% complete for bare-minimum functionality for an MVP?
-
-[@MediaAnalytics-spec](../concepts/MediaAnalytics/MediaAnalytics.md)
+---
+timestamp: 'Sun Oct 19 2025 20:37:24 GMT-0400 (Eastern Daylight Time)'
+parent: '[[../20251019_203724.f23c5609.md]]'
+content_id: 53921fb06358deda43742e91570bb9c6411f8ec005df8b60de747a378ef87088
+---
 
 # response:
 
 To make the `MediaAnalytics` concept 100% complete for bare-minimum MVP functionality, we need to:
 
-1.  **Formalize Interaction Weights:** Move the `interactionType` weights from "Design Notes" into the concept definition, as they are crucial for the `recordInteraction` action. A `configuration` section is suitable for this.
-2.  **Refine `recomputeScores` Action:** The `placeId` in `recomputeScoresForPlace` introduces an external dependency not explicitly part of `MediaAnalytics`'s core state (`MediaInteraction` or `MediaEngagement`). For bare-minimum `MediaAnalytics` (focused on `MediaItem` and `User`), a more generic `recomputeScores` for a set of `mediaItemId`s is more appropriate and self-contained.
-3.  **Add Detail to `requires` and `effect`:** Be more explicit about preconditions and postconditions for core actions, especially how engagement scores are initialized or updated.
+1. **Formalize Interaction Weights:** Move the `interactionType` weights from "Design Notes" into the concept definition, as they are crucial for the `recordInteraction` action. A `configuration` section is suitable for this.
+2. **Refine `recomputeScores` Action:** The `placeId` in `recomputeScoresForPlace` introduces an external dependency not explicitly part of `MediaAnalytics`'s core state (`MediaInteraction` or `MediaEngagement`). For bare-minimum `MediaAnalytics` (focused on `MediaItem` and `User`), a more generic `recomputeScores` for a set of `mediaItemId`s is more appropriate and self-contained.
+3. **Add Detail to `requires` and `effect`:** Be more explicit about preconditions and postconditions for core actions, especially how engagement scores are initialized or updated.
 
 Here's the updated `MediaAnalytics` concept:
 
