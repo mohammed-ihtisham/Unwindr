@@ -1,0 +1,98 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-71.0656, 42.3551]
+      },
+      "properties": {
+        "name": "Sample Coffee Shop",
+        "amenity": "cafe",
+        "addr:housenumber": "123",
+        "addr:street": "Main Street",
+        "addr:city": "Boston",
+        "addr:state": "MA",
+        "addr:postcode": "02108"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-71.0656, 42.3551]
+      },
+      "properties": {
+        "name": "Boston Common",
+        "leisure": "park",
+        "addr:city": "Boston",
+        "addr:state": "MA"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-71.0656, 42.3551]
+      },
+      "properties": {
+        "name": "Sample Restaurant",
+        "amenity": "restaurant",
+        "addr:city": "Boston",
+        "addr:state": "MA"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-71.0656, 42.3551]
+      },
+      "properties": {
+        "name": "Test Library",
+        "amenity": "library",
+        "addr:city": "Boston",
+        "addr:state": "MA"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-71.0656, 42.3551]
+      },
+      "properties": {
+        "name": "Test Bar",
+        "amenity": "bar",
+        "addr:city": "Boston",
+        "addr:state": "MA"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-71.0656, 42.3551]
+      },
+      "properties": {
+        "name": "Test Museum",
+        "amenity": "museum",
+        "addr:city": "Boston",
+        "addr:state": "MA"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-71.0656, 42.3551]
+      },
+      "properties": {
+        "leisure": "playground",
+        "addr:city": "Boston",
+        "addr:state": "MA"
+      }
+    }
+  ]
+}
