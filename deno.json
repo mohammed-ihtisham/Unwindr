@@ -13,6 +13,7 @@
         "test:likert": "deno test --allow-read --allow-env --allow-net --allow-sys src/concepts/LikertSurvey/LikertSurveyConcept.test.ts",
         "test:media-analytics": "deno test --allow-read --allow-env --allow-net --allow-sys src/concepts/MediaAnalytics/MediaAnalyticsConcept.test.ts",
         "test:quality-ranking": "deno test --allow-read --allow-env --allow-net --allow-sys src/concepts/QualityRanking/QualityRankingConcept.test.ts",
-        "test:interest-filter": "deno test --allow-read --allow-env --allow-net --allow-sys src/concepts/InterestFilter/InterestFilterConcept.test.ts"
+        "test:interest-filter": "deno test --allow-read --allow-env --allow-net --allow-sys src/concepts/InterestFilter/InterestFilterConcept.test.ts",
+        "import:boston": "deno run --allow-all scripts/import-boston-places.ts"
     }
 }

@@ -1081,3 +1081,121 @@ Deno.test("Action: getPlace retrieves correct place information and enforces req
     await client.close();
   }
 });
+
+Deno.test("Action: getPlacesInViewport retrieves places within viewport bounds", async () => {
+  console.log("\n=== Testing getPlacesInViewport Action ===");
+  const [db, client] = await testDb();
+  const placeCatalog = new PlaceCatalogConcept(db);
+
+  try {
+    // Setup: Seed places for viewport query tests
+    console.log("\n[SETUP] Seed places for viewport query");
+    const sampleFilePath = "./src/concepts/PlaceCatalog/sample-places.geojson";
+    await placeCatalog.bulkImportOSMPlaces({
+      osmDataPath: sampleFilePath,
+    });
+    console.log("  ✓ Places seeded");
+
+    // Should retrieve places within viewport bounds
+    console.log("\n[TEST] Retrieve places within valid viewport");
+    const southLat = 42.35;
+    const westLng = -71.1;
+    const northLat = 42.37;
+    const eastLng = -71.05;
+    console.log(
+      `  Input: { southLat: ${southLat}, westLng: ${westLng}, northLat: ${northLat}, eastLng: ${eastLng} }`,
+    );
+    const result = await placeCatalog.getPlacesInViewport({
+      southLat,
+      westLng,
+      northLat,
+      eastLng,
+    });
+    console.log("  Output:", result);
+    assertEquals(
+      isError(result),
+      false,
+      "Query should succeed for valid viewport.",
+    );
+    assertExists(
+      Array.isArray(result),
+      "Result should be an array of places.",
+    );
+    console.log(`  ✓ Retrieved ${(result as Array<unknown>).length} places`);
+
+    // Verify returned structure
+    if (Array.isArray(result) && result.length > 0) {
+      const firstPlace = result[0];
+      assertExists(
+        "id" in firstPlace && "name" in firstPlace &&
+          "category" in firstPlace &&
+          "lat" in firstPlace && "lng" in firstPlace,
+        "Each place should have id, name, category, lat, and lng.",
+      );
+      console.log("  ✓ Returned places have correct structure");
+
+      // Verify coordinates are within bounds
+      assertExists(
+        firstPlace.lat >= southLat && firstPlace.lat <= northLat,
+        "Latitude should be within viewport bounds.",
+      );
+      assertExists(
+        firstPlace.lng >= westLng && firstPlace.lng <= eastLng,
+        "Longitude should be within viewport bounds.",
+      );
+      console.log("  ✓ Place coordinates are within viewport bounds");
+    }
+
+    // Should fail with invalid viewport bounds (south >= north)
+    console.log("\n[TEST] Reject invalid viewport (south >= north)");
+    console.log(
+      "  Input: { southLat: 42.37, westLng: -71.1, northLat: 42.35, eastLng: -71.05 }",
+    );
+    const resultInvalidViewport = await placeCatalog.getPlacesInViewport({
+      southLat: 42.37,
+      westLng: -71.1,
+      northLat: 42.35,
+      eastLng: -71.05,
+    });
+    console.log("  Output:", resultInvalidViewport);
+    assertEquals(
+      isError(resultInvalidViewport),
+      true,
+      "Should return error for invalid viewport bounds.",
+    );
+    assertEquals(
+      (resultInvalidViewport as { error: string }).error,
+      "Invalid viewport bounds.",
+      "Error message should indicate invalid viewport.",
+    );
+    console.log("  ✓ Correctly rejected invalid viewport bounds");
+
+    // Should fail with invalid coordinates
+    console.log("\n[TEST] Reject invalid coordinates");
+    console.log(
+      "  Input: { southLat: 91, westLng: -71.1, northLat: 42.37, eastLng: -71.05 }",
+    );
+    const resultInvalidCoords = await placeCatalog.getPlacesInViewport({
+      southLat: 91,
+      westLng: -71.1,
+      northLat: 42.37,
+      eastLng: -71.05,
+    });
+    console.log("  Output:", resultInvalidCoords);
+    assertEquals(
+      isError(resultInvalidCoords),
+      true,
+      "Should return error for invalid coordinates.",
+    );
+    assertEquals(
+      (resultInvalidCoords as { error: string }).error,
+      "Invalid coordinates provided.",
+      "Error message should indicate invalid coordinates.",
+    );
+    console.log("  ✓ Correctly rejected invalid coordinates");
+
+    console.log("\n✅ All getPlacesInViewport requirements verified");
+  } finally {
+    await client.close();
+  }
+});

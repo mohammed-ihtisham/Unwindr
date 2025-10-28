@@ -41,6 +41,17 @@ interface PlaceDocument {
   addedBy: User;
   location: LocationData;
   source: "provider" | "user_added";
+  // Optional enrichment fields from Google Places API
+  description?: string; // Editorial description
+  editorialSummary?: string; // Brief overview
+  googleRating?: number; // User rating (1-5)
+  googleReviewCount?: number; // Total number of ratings
+  businessStatus?: string; // OPERATIONAL, CLOSED_TEMPORARILY, etc.
+  placeTypes?: string[]; // Array of place types
+  openingHours?: {
+    open_now?: boolean;
+    weekday_text?: string[];
+  };
 }
 
 // Helper for coordinate validation
@@ -615,5 +626,156 @@ export default class PlaceCatalogConcept {
     // Return the document without _id and with id as per common API patterns
     const { _id, ...rest } = place;
     return { place: { id: _id, ...rest } };
+  }
+
+  /**
+   * getPlacesInViewport (southLat: Number, westLng: Number, northLat: Number, eastLng: Number): (places: Array<PlaceData>) | {error: string}
+   *
+   * **requires** coordinates are valid, forming a proper viewport rectangle
+   *
+   * **effects** returns places within the viewport with essential data for map display.
+   *             Optimized for lazy loading - returns only fields needed for map markers.
+   */
+  async getPlacesInViewport(
+    { southLat, westLng, northLat, eastLng }: {
+      southLat: number;
+      westLng: number;
+      northLat: number;
+      eastLng: number;
+    },
+  ): Promise<
+    Array<{
+      id: ID;
+      name: string;
+      category: string;
+      lat: number;
+      lng: number;
+    }> | { error: string }
+  > {
+    if (
+      !isValidCoordinates(southLat, westLng) ||
+      !isValidCoordinates(northLat, eastLng)
+    ) {
+      return { error: "Invalid coordinates provided." };
+    }
+    if (southLat >= northLat || westLng >= eastLng) {
+      return { error: "Invalid viewport bounds." };
+    }
+
+    try {
+      const foundPlaces = await this.places.find({
+        location: {
+          $geoWithin: {
+            $box: [
+              [westLng, southLat], // Southwest corner [lng, lat]
+              [eastLng, northLat], // Northeast corner [lng, lat]
+            ],
+          },
+        },
+      }, {
+        projection: {
+          _id: 1,
+          name: 1,
+          category: 1,
+          location: 1,
+        },
+      }).toArray();
+
+      // Transform to include lat/lng as separate fields for easier frontend consumption
+      return foundPlaces.map((p) => ({
+        id: p._id,
+        name: p.name,
+        category: p.category,
+        lat: p.location.coordinates[1],
+        lng: p.location.coordinates[0],
+      }));
+    } catch (e) {
+      return {
+        error: `Failed to retrieve places in viewport: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      };
+    }
+  }
+
+  /**
+   * enrichPlace (placeId: Id, enrichmentData: EnrichmentData): Empty | {error: string}
+   *
+   * Updates a place with optional enrichment data from external APIs (e.g., Google Places)
+   *
+   * **requires** placeId exists
+   * **effects** updates place with optional enrichment fields
+   */
+  async enrichPlace(
+    {
+      placeId,
+      description,
+      editorialSummary,
+      googleRating,
+      googleReviewCount,
+      businessStatus,
+      placeTypes,
+      openingHours,
+    }: {
+      placeId: ID;
+      description?: string;
+      editorialSummary?: string;
+      googleRating?: number;
+      googleReviewCount?: number;
+      businessStatus?: string;
+      placeTypes?: string[];
+      openingHours?: {
+        open_now?: boolean;
+        weekday_text?: string[];
+      };
+    },
+  ): Promise<Empty | { error: string }> {
+    if (!placeId) {
+      return { error: "Place ID is required." };
+    }
+
+    const enrichmentFields: Partial<PlaceDocument> = {};
+
+    if (description !== undefined) enrichmentFields.description = description;
+    if (editorialSummary !== undefined) {
+      enrichmentFields.editorialSummary = editorialSummary;
+    }
+    if (googleRating !== undefined) {
+      enrichmentFields.googleRating = googleRating;
+    }
+    if (googleReviewCount !== undefined) {
+      enrichmentFields.googleReviewCount = googleReviewCount;
+    }
+    if (businessStatus !== undefined) {
+      enrichmentFields.businessStatus = businessStatus;
+    }
+    if (placeTypes !== undefined) enrichmentFields.placeTypes = placeTypes;
+    if (openingHours !== undefined) {
+      enrichmentFields.openingHours = openingHours;
+    }
+
+    // If no fields to update, return error
+    if (Object.keys(enrichmentFields).length === 0) {
+      return { error: "No enrichment data provided." };
+    }
+
+    try {
+      const result = await this.places.updateOne(
+        { _id: placeId },
+        { $set: enrichmentFields },
+      );
+
+      if (result.matchedCount === 0) {
+        return { error: `Place with ID ${placeId} not found.` };
+      }
+
+      return {};
+    } catch (e) {
+      return {
+        error: `Failed to enrich place: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      };
+    }
   }
 }

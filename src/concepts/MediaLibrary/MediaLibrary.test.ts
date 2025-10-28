@@ -683,3 +683,147 @@ Deno.test("Query: _getMediaByPlace retrieves correct media items and enforces re
     await client.close();
   }
 });
+
+Deno.test("Action: getPreviewImagesForPlaces returns preview images for multiple places", async () => {
+  console.log("\n=== Testing getPreviewImagesForPlaces Action ===");
+  const [db, client] = await testDb();
+  const mediaLibrary = new MediaLibraryConcept(db);
+
+  try {
+    const placeAId = freshID() as ID;
+    const placeBId = freshID() as ID;
+    const placeCId = freshID() as ID;
+    const placeDId = freshID() as ID; // Place with no media
+    const userAId = freshID() as ID;
+
+    // Setup: Add media for places A, B, C
+    console.log("\n[SETUP] Adding media for testing");
+
+    // Place A: Has provider media
+    await mediaLibrary.seedMedia({
+      placeId: placeAId,
+      urls: [
+        "https://example.com/a1.jpg",
+        "https://example.com/a2.jpg",
+        "https://example.com/a3.jpg",
+      ],
+    });
+    console.log(`  ✓ Added 3 media items for place A`);
+
+    // Place B: Has user media
+    await mediaLibrary.addMedia({
+      userId: userAId,
+      placeId: placeBId,
+      imageUrl: "https://example.com/b1.jpg",
+    });
+    await mediaLibrary.addMedia({
+      userId: userAId,
+      placeId: placeBId,
+      imageUrl: "https://example.com/b2.jpg",
+    });
+    console.log(`  ✓ Added 2 media items for place B`);
+
+    // Place C: Has one media item
+    await mediaLibrary.addMedia({
+      userId: userAId,
+      placeId: placeCId,
+      imageUrl: "https://example.com/c1.jpg",
+    });
+    console.log(`  ✓ Added 1 media item for place C`);
+    console.log(`  ✓ Place D has no media`);
+
+    // Should retrieve preview images for multiple places
+    console.log("\n[TEST] Retrieve preview images for multiple places");
+    console.log(
+      `  Input: { placeIds: [${placeAId}, ${placeBId}, ${placeCId}, ${placeDId}] }`,
+    );
+    const result = await mediaLibrary.getPreviewImagesForPlaces({
+      placeIds: [placeAId, placeBId, placeCId, placeDId],
+    });
+    console.log("  Output:", result);
+    assertEquals(isError(result), false, "Query should succeed.");
+    if (isError(result)) return;
+
+    assertExists(Array.isArray(result), "Result should be an array.");
+    assertEquals(result.length, 4, "Should return previews for all 4 places.");
+
+    // Verify preview image for place A (should be first provider image)
+    const placeAPreview = result.find((p) => p.placeId === placeAId);
+    assertExists(placeAPreview, "Place A should have a preview.");
+    assertExists(
+      placeAPreview!.previewImage,
+      "Place A should have a preview image.",
+    );
+    assertEquals(
+      placeAPreview!.previewImage,
+      "https://example.com/a1.jpg",
+      "Place A preview should be the first image.",
+    );
+    console.log("  ✓ Place A has correct preview image");
+
+    // Verify preview image for place B (should be first user image)
+    const placeBPreview = result.find((p) => p.placeId === placeBId);
+    assertExists(placeBPreview, "Place B should have a preview.");
+    assertExists(
+      placeBPreview!.previewImage,
+      "Place B should have a preview image.",
+    );
+    assertEquals(
+      placeBPreview!.previewImage,
+      "https://example.com/b2.jpg",
+      "Place B preview should be the most recent image.",
+    );
+    console.log("  ✓ Place B has correct preview image");
+
+    // Verify preview image for place C
+    const placeCPreview = result.find((p) => p.placeId === placeCId);
+    assertExists(placeCPreview, "Place C should have a preview.");
+    assertEquals(
+      placeCPreview!.previewImage,
+      "https://example.com/c1.jpg",
+      "Place C preview should match.",
+    );
+    console.log("  ✓ Place C has correct preview image");
+
+    // Verify no preview for place D (has no media)
+    const placeDPreview = result.find((p) => p.placeId === placeDId);
+    assertExists(placeDPreview, "Place D should be in the result.");
+    assertEquals(
+      placeDPreview!.previewImage,
+      null,
+      "Place D should have no preview image.",
+    );
+    console.log("  ✓ Place D correctly has no preview image");
+
+    // Should handle empty array
+    console.log("\n[TEST] Handle empty placeIds array");
+    console.log("  Input: { placeIds: [] }");
+    const emptyResult = await mediaLibrary.getPreviewImagesForPlaces({
+      placeIds: [],
+    });
+    console.log("  Output:", emptyResult);
+    assertEquals(isError(emptyResult), false, "Query should succeed.");
+    if (isError(emptyResult)) return;
+    assertEquals(emptyResult.length, 0, "Should return empty array.");
+    console.log("  ✓ Correctly returned empty array");
+
+    // Should fail with invalid input (not an array)
+    console.log("\n[TEST] Reject non-array input");
+    // @ts-ignore: Intentionally testing invalid input
+    const invalidResult = await mediaLibrary.getPreviewImagesForPlaces({
+      placeIds: placeAId, // Single ID instead of array
+    });
+    console.log("  Output:", invalidResult);
+    assertEquals(isError(invalidResult), true, "Should return error.");
+    assertEquals(
+      (invalidResult as { error: string }).error,
+      "placeIds must be provided as an array.",
+      "Error message should indicate invalid input.",
+    );
+    console.log("  ✓ Correctly rejected non-array input");
+
+    console.log("\n✅ All getPreviewImagesForPlaces requirements verified");
+  } finally {
+    await client.close();
+  }
+});

@@ -253,4 +253,107 @@ export default class MediaLibraryConcept {
       return { error: `Failed to retrieve media: ${(error as Error).message}` };
     }
   }
+
+  /**
+   * getMediaItemsByPlace (placeId: Id) : (mediaItems: Array MediaItem)
+   *
+   * **requires** placeId provided
+   *
+   * **effects** returns full media items with image URLs ordered by createdAt desc
+   *
+   * Retrieves all media items associated with a specific place,
+   * ordered by their creation date in descending order (most recent first).
+   * Returns the full media item data including imageUrl for frontend display.
+   * @param {object} args - The arguments for the query.
+   * @param {Place} args.placeId - The ID of the place to retrieve media for.
+   * @returns {Promise<Array<MediaItem> | { error: string }>} An array of full MediaItem objects, or an error.
+   */
+  async getMediaItemsByPlace({
+    placeId,
+  }: {
+    placeId: Place;
+  }): Promise<Array<MediaItem> | { error: string }> {
+    if (!placeId) {
+      return { error: "placeId must be provided." };
+    }
+
+    try {
+      const mediaItems = await this.mediaItems
+        .find({ placeId: placeId })
+        .sort({ createdAt: -1 }) // Order by creation date, newest first
+        .toArray();
+
+      return mediaItems;
+    } catch (error) {
+      console.error("Error getting media items by place:", error);
+      return {
+        error: `Failed to retrieve media items: ${(error as Error).message}`,
+      };
+    }
+  }
+
+  /**
+   * getPreviewImagesForPlaces (placeIds: Array<Id>) : (previews: Array<{ placeId: Id, previewImage: String | null }>)
+   *
+   * **requires** placeIds provided (can be empty array)
+   *
+   * **effects** returns a preview image (first image) for each place in the given array.
+   *             Returns null for places with no media.
+   *             Optimized for lazy loading - returns just one image per place for map thumbnails.
+   * @param {object} args - The arguments for the query.
+   * @param {Place[]} args.placeIds - Array of place IDs to get preview images for.
+   * @returns {Promise<Array<{ placeId: Place; previewImage: string | null }> | { error: string }>} An array of preview objects, or an error.
+   */
+  async getPreviewImagesForPlaces({
+    placeIds,
+  }: {
+    placeIds: Place[];
+  }): Promise<
+    Array<{ placeId: Place; previewImage: string | null }> | { error: string }
+  > {
+    if (!placeIds || !Array.isArray(placeIds)) {
+      return { error: "placeIds must be provided as an array." };
+    }
+
+    if (placeIds.length === 0) {
+      return [];
+    }
+
+    try {
+      // Group media by placeId and get the first image for each place
+      const mediaGroupedByPlace = await this.mediaItems
+        .aggregate([
+          {
+            $match: { placeId: { $in: placeIds } },
+          },
+          {
+            $sort: { createdAt: -1 }, // Newest first
+          },
+          {
+            $group: {
+              _id: "$placeId",
+              previewImage: { $first: "$imageUrl" }, // Get first image for each place
+            },
+          },
+        ])
+        .toArray();
+
+      // Create a map of placeId -> previewImage
+      const previewMap = new Map<string, string>();
+      mediaGroupedByPlace.forEach((item) => {
+        previewMap.set(item._id, item.previewImage);
+      });
+
+      // Return previews for all requested places (with null for places with no media)
+      return placeIds.map((placeId) => ({
+        placeId,
+        previewImage: previewMap.get(placeId) || null,
+      }));
+    } catch (error) {
+      console.error("Error getting preview images for places:", error);
+      return {
+        error: `Failed to retrieve preview images: ${(error as Error).message}`,
+      };
+    }
+  }
 }
