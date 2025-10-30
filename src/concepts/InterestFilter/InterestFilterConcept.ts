@@ -310,6 +310,40 @@ export default class InterestFilterConcept {
       promptBuilder,
     );
     let { tags, exclusions, confidence, rationale, warnings } = llmResult;
+    const inputLower = text.toLowerCase();
+
+    // Normalize: ensure intuitive handling regardless of external LLM variations
+    // 1) If user explicitly mentions "not crowded", treat it as a positive preference tag
+    if (inputLower.includes("not crowded")) {
+      if (!tags.includes("not_crowded")) tags.push("not_crowded");
+      exclusions = exclusions.filter((t) => t !== "not_crowded");
+    }
+
+    // 1b) Only keep exclusions when the user explicitly expresses avoidance
+    const expressesAvoidance = inputLower.includes("avoid") ||
+      inputLower.includes("no noisy") ||
+      inputLower.includes("not noisy") ||
+      (inputLower.includes("no ") && (
+        inputLower.includes("music") ||
+        inputLower.includes("nightlife") ||
+        inputLower.includes("parties")
+      ));
+    if (!expressesAvoidance) {
+      exclusions = [];
+    }
+
+    // 2) If user expresses uncertainty, lower confidence and trigger confirmation
+    if (
+      inputLower.includes("i'm not sure") ||
+      inputLower.includes("not sure") ||
+      inputLower.includes("i don't know")
+    ) {
+      confidence = Math.min(confidence, 0.5);
+      if (!warnings.some((w) => w.toLowerCase().includes("uncertainty"))) {
+        warnings.push("User expressed uncertainty, lower confidence.");
+      }
+      // Note: actual needsConfirmation flag is computed by _confidenceValidator below
+    }
     const lastPrompt = text; // Storing the input text as the last prompt
 
     // Validate inferred tags and exclusions against whitelist

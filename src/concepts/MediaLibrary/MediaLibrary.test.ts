@@ -809,8 +809,8 @@ Deno.test("Action: getPreviewImagesForPlaces returns preview images for multiple
 
     // Should fail with invalid input (not an array)
     console.log("\n[TEST] Reject non-array input");
-    // @ts-ignore: Intentionally testing invalid input
     const invalidResult = await mediaLibrary.getPreviewImagesForPlaces({
+      // @ts-ignore: Intentionally passing a single ID instead of an array to test validation
       placeIds: placeAId, // Single ID instead of array
     });
     console.log("  Output:", invalidResult);
