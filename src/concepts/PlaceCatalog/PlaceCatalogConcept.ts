@@ -52,6 +52,8 @@ interface PlaceDocument {
     open_now?: boolean;
     weekday_text?: string[];
   };
+  // Optional: link to Google Images search for this place
+  imagesUrl?: string;
 }
 
 // Helper for coordinate validation
@@ -716,6 +718,7 @@ export default class PlaceCatalogConcept {
       businessStatus,
       placeTypes,
       openingHours,
+      imagesUrl,
     }: {
       placeId: ID;
       description?: string;
@@ -728,6 +731,7 @@ export default class PlaceCatalogConcept {
         open_now?: boolean;
         weekday_text?: string[];
       };
+      imagesUrl?: string;
     },
   ): Promise<Empty | { error: string }> {
     if (!placeId) {
@@ -753,6 +757,7 @@ export default class PlaceCatalogConcept {
     if (openingHours !== undefined) {
       enrichmentFields.openingHours = openingHours;
     }
+    if (imagesUrl !== undefined) enrichmentFields.imagesUrl = imagesUrl;
 
     // If no fields to update, return error
     if (Object.keys(enrichmentFields).length === 0) {
