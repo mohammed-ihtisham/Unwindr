@@ -22,9 +22,15 @@ const REQUESTING_TIMEOUT = parseInt(
   10,
 );
 
-// TODO: make sure you configure this environment variable for proper CORS configuration
-const REQUESTING_ALLOWED_DOMAIN = Deno.env.get("REQUESTING_ALLOWED_DOMAIN") ??
-  "*";
+// CORS configuration - allow frontend domain in production
+// Set REQUESTING_ALLOWED_DOMAIN environment variable to your frontend URL
+// For multiple origins, use comma-separated values: "https://domain1.com,https://domain2.com"
+const REQUESTING_ALLOWED_DOMAIN_ENV = Deno.env.get("REQUESTING_ALLOWED_DOMAIN");
+const REQUESTING_ALLOWED_DOMAIN = REQUESTING_ALLOWED_DOMAIN_ENV
+  ? REQUESTING_ALLOWED_DOMAIN_ENV.includes(",")
+    ? REQUESTING_ALLOWED_DOMAIN_ENV.split(",").map((s) => s.trim())
+    : REQUESTING_ALLOWED_DOMAIN_ENV
+  : "https://unwindr.onrender.com"; // Default to production frontend
 
 // Choose whether or not to persist responses
 const REQUESTING_SAVE_RESPONSES = Deno.env.get("REQUESTING_SAVE_RESPONSES") ??
@@ -197,6 +203,9 @@ export function startRequestingServer(
     cors({
       origin: REQUESTING_ALLOWED_DOMAIN,
       credentials: true,
+      allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+      allowHeaders: ["Content-Type", "Authorization"],
+      exposeHeaders: ["Content-Type"],
     }),
   );
 
