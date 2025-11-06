@@ -15,13 +15,11 @@ type SessionToken = ID; // Session tokens are also IDs
  *   _id: ID
  *   username: String
  *   passwordHash: String
- *   canModerate: Flag
  */
 interface UserDoc {
   _id: User;
   username: string;
   passwordHash: string;
-  canModerate: boolean;
 }
 
 /**
@@ -38,8 +36,8 @@ interface SessionDoc {
 
 /**
  * concept UserAuth [User]
- * purpose authenticate users and manage moderator privileges
- * principle users must register and log in before contributing; moderators can verify content
+ * purpose authenticate users
+ * principle users must register and log in before contributing
  */
 export default class UserAuthConcept {
   users: Collection<UserDoc>;
@@ -51,8 +49,6 @@ export default class UserAuthConcept {
     this.users.createIndex({ username: 1 }, { unique: true });
 
     this.activeSessions = this.db.collection(PREFIX + "activeSessions");
-    // Index for finding sessions by user (e.g., to invalidate all sessions for a user)
-    this.activeSessions.createIndex({ userId: 1 });
   }
 
   /**
@@ -60,7 +56,7 @@ export default class UserAuthConcept {
    *
    * **requires** username unique and password non-empty
    *
-   * **effects** creates a new user with default permissions (cannot moderate); returns userId on success or an Error on failure (e.g., username taken).
+   * **effects** creates a new user; returns userId on success or an Error on failure (e.g., username taken).
    */
   async registerUser(
     { username, password }: { username: string; password: string },
@@ -88,7 +84,6 @@ export default class UserAuthConcept {
       _id: newUserId,
       username,
       passwordHash,
-      canModerate: false, // Default permissions: cannot moderate
     };
 
     // Insert into the database
@@ -156,7 +151,7 @@ export default class UserAuthConcept {
   }
 
   /**
-   * getAuthenticatedUser (sessionToken: String) : (userProfile: {userId: ID, username: String, canModerate: Flag} | null)
+   * getAuthenticatedUser (sessionToken: String) : (userProfile: {userId: ID, username: String} | null)
    *
    * **requires** sessionToken is valid and exists in activeSessions
    *
@@ -166,9 +161,7 @@ export default class UserAuthConcept {
     { sessionToken }: { sessionToken: string },
   ): Promise<
     {
-      userProfile:
-        | { userId: User; username: string; canModerate: boolean }
-        | null;
+      userProfile: { userId: User; username: string } | null;
     }
   > {
     const session = await this.activeSessions.findOne({
@@ -181,7 +174,7 @@ export default class UserAuthConcept {
 
     const user = await this.users.findOne(
       { _id: session.userId },
-      { projection: { username: 1, canModerate: 1 } },
+      { projection: { username: 1 } },
     );
 
     if (!user) {
@@ -197,221 +190,7 @@ export default class UserAuthConcept {
       userProfile: {
         userId: user._id,
         username: user.username,
-        canModerate: user.canModerate,
       },
     };
-  }
-
-  /**
-   * changePassword (sessionToken: String, oldPassword: String, newPassword: String) : (success: Boolean | Error)
-   *
-   * **requires** sessionToken is valid and linked to a user, oldPassword matches the user's current passwordHash, and newPassword is non-empty.
-   *
-   * **effect** updates the passwordHash for the authenticated user, invalidates existing sessionTokens, returns true on success, or an Error on failure.
-   */
-  async changePassword(
-    { sessionToken, oldPassword, newPassword }: {
-      sessionToken: string;
-      oldPassword: string;
-      newPassword: string;
-    },
-  ): Promise<{ success: boolean } | { error: string }> {
-    if (!newPassword || newPassword.length === 0) {
-      return { error: "New password cannot be empty" };
-    }
-
-    const session = await this.activeSessions.findOne({
-      _id: sessionToken as SessionToken,
-    });
-    if (!session) {
-      return { error: "Invalid session" };
-    }
-
-    const user = await this.users.findOne({ _id: session.userId });
-    if (!user) {
-      // Data inconsistency: session points to non-existent user. Clean up session.
-      await this.activeSessions.deleteOne({
-        _id: sessionToken as SessionToken,
-      });
-      return { error: "User not found for session" };
-    }
-
-    const isOldPasswordValid = await bcrypt.compare(
-      oldPassword,
-      user.passwordHash,
-    );
-    if (!isOldPasswordValid) {
-      return { error: "Old password does not match" };
-    }
-
-    const newPasswordHash = await bcrypt.hash(newPassword, 10);
-
-    // Update password
-    await this.users.updateOne(
-      { _id: user._id },
-      { $set: { passwordHash: newPasswordHash } },
-    );
-
-    // Invalidate all sessions for this user (security best practice after password change)
-    await this.activeSessions.deleteMany({ userId: user._id });
-
-    return { success: true };
-  }
-
-  /**
-   * grantModerator (targetUserId: ID, adminSessionToken: String) : (success: Boolean | Error)
-   *
-   * **requires** adminSessionToken is valid and linked to a user whose canModerate is true, and targetUserId exists.
-   *
-   * **effect** sets canModerate to true for targetUser, returns true on success, or an Error on failure.
-   */
-  async grantModerator(
-    { targetUserId, adminSessionToken }: {
-      targetUserId: User;
-      adminSessionToken: string;
-    },
-  ): Promise<{ success: boolean } | { error: string }> {
-    const adminSession = await this.activeSessions.findOne({
-      _id: adminSessionToken as SessionToken,
-    });
-    if (!adminSession) {
-      return { error: "Invalid admin session" };
-    }
-
-    const adminUser = await this.users.findOne({ _id: adminSession.userId });
-    if (!adminUser) {
-      // Data inconsistency. Clean up session.
-      await this.activeSessions.deleteOne({
-        _id: adminSessionToken as SessionToken,
-      });
-      return { error: "Admin user not found for session" };
-    }
-
-    // Allow self-granting or require moderator privileges
-    const isSelfGrant = adminUser._id === targetUserId;
-    if (!isSelfGrant && !adminUser.canModerate) {
-      return { error: "Admin user does not have moderator privileges" };
-    }
-
-    const targetUser = await this.users.findOne({ _id: targetUserId });
-    if (!targetUser) {
-      return { error: "Target user not found" };
-    }
-
-    // Check if target user is already a moderator for idempotency
-    if (targetUser.canModerate) {
-      return { success: true };
-    }
-
-    // Grant moderator privileges
-    await this.users.updateOne(
-      { _id: targetUserId },
-      { $set: { canModerate: true } },
-    );
-
-    return { success: true };
-  }
-
-  /**
-   * revokeModerator (targetUserId: ID, adminSessionToken: String) : (success: Boolean | Error)
-   *
-   * **requires** adminSessionToken is valid and linked to a user whose canModerate is true, and targetUserId exists.
-   *
-   * **effect** sets canModerate to false for targetUser, returns true on success, or an Error on failure.
-   */
-  async revokeModerator(
-    { targetUserId, adminSessionToken }: {
-      targetUserId: User;
-      adminSessionToken: string;
-    },
-  ): Promise<{ success: boolean } | { error: string }> {
-    const adminSession = await this.activeSessions.findOne({
-      _id: adminSessionToken as SessionToken,
-    });
-    if (!adminSession) {
-      return { error: "Invalid admin session" };
-    }
-
-    const adminUser = await this.users.findOne({ _id: adminSession.userId });
-    if (!adminUser) {
-      // Data inconsistency. Clean up session.
-      await this.activeSessions.deleteOne({
-        _id: adminSessionToken as SessionToken,
-      });
-      return { error: "Admin user not found for session" };
-    }
-
-    if (!adminUser.canModerate) {
-      return { error: "Admin user does not have moderator privileges" };
-    }
-
-    const targetUser = await this.users.findOne({ _id: targetUserId });
-    if (!targetUser) {
-      return { error: "Target user not found" };
-    }
-
-    // Check if target user is not a moderator already for idempotency
-    if (!targetUser.canModerate) {
-      return { success: true };
-    }
-
-    await this.users.updateOne(
-      { _id: targetUserId },
-      { $set: { canModerate: false } },
-    );
-
-    return { success: true };
-  }
-
-  /**
-   * _getUserDetails (userId: ID): (user: {username: String, canModerate: Boolean})
-   *
-   * **requires** userId exists
-   *
-   * **effects** returns user's username and moderation status
-   * Note: This is a query, so it returns an array of results.
-   */
-  async _getUserDetails(
-    { userId }: { userId: User },
-  ): Promise<
-    Array<{ user: { username: string; canModerate: boolean } }> | {
-      error: string;
-    }
-  > {
-    const user = await this.users.findOne(
-      { _id: userId },
-      { projection: { username: 1, canModerate: 1 } },
-    );
-
-    if (!user) {
-      return { error: "User not found" };
-    }
-
-    return [{
-      user: { username: user.username, canModerate: user.canModerate },
-    }];
-  }
-
-  /**
-   * _isModerator (userId: ID): (isModerator: Boolean)
-   *
-   * **requires** userId exists
-   *
-   * **effects** returns true if user can moderate, false otherwise
-   * Note: This is a query, so it returns an array of results.
-   */
-  async _isModerator(
-    { userId }: { userId: User },
-  ): Promise<Array<{ isModerator: boolean }> | { error: string }> {
-    const user = await this.users.findOne(
-      { _id: userId },
-      { projection: { canModerate: 1 } },
-    );
-
-    if (!user) {
-      return { error: "User not found" };
-    }
-
-    return [{ isModerator: user.canModerate }];
   }
 }

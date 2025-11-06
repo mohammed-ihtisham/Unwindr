@@ -3,15 +3,14 @@
 [text](../../../context/design/brainstorming/questioning.md/steps/response.b80891d5.md)
 
 concept UserAuth [User]
-purpose authenticate users and manage moderator privileges
-principle users must register and log in before contributing; moderators can verify content
+purpose authenticate users
+principle users must register and log in before contributing
 
 state
   a set of Users with
     an _id Id                   // Added explicit userId
     a username String
     a passwordHash String
-    a canModerate Flag
 
   a set of activeSessions with
     a sessionToken String
@@ -20,7 +19,7 @@ state
 actions
   registerUser (username: String, password: String) : (userId: Id | Error)
     requires username unique and password non-empty
-    effect creates a new user with default permissions (cannot moderate), returns userId on success or an Error on failure (e.g., username taken).
+    effect creates a new user, returns userId on success or an Error on failure (e.g., username taken).
 
   login (username: String, password: String) : (sessionToken: String | Error)
     requires username exists and password matches
@@ -30,18 +29,6 @@ actions
     requires sessionToken exists in activeSessions
     effect removes the sessionToken from activeSessions, returns true on success, false otherwise.
 
-  getAuthenticatedUser (sessionToken: String) : (userProfile: {userId: Id, username: String, canModerate: Flag} | null)
+  getAuthenticatedUser (sessionToken: String) : (userProfile: {userId: Id, username: String} | null)
     requires sessionToken is valid and exists in activeSessions
     effect returns a subset of user information for the authenticated user, or null if sessionToken is invalid.
-
-  changePassword (sessionToken: String, oldPassword: String, newPassword: String) : (success: Boolean | Error)
-    requires sessionToken is valid and linked to a user, oldPassword matches the user's current passwordHash, and newPassword is non-empty.
-    effect updates the passwordHash for the authenticated user, invalidates existing sessionTokens (optional but good security), returns true on success, or an Error on failure.
-
-  grantModerator (targetUserId: Id, adminSessionToken: String) : (success: Boolean | Error)
-    requires adminSessionToken is valid and linked to a user whose canModerate is true, and targetUserId exists.
-    effect sets canModerate to true for targetUser, returns true on success, or an Error on failure.
-
-  revokeModerator (targetUserId: Id, adminSessionToken: String) : (success: Boolean | Error)
-    requires adminSessionToken is valid and linked to a user whose canModerate is true, and targetUserId exists.
-    effect sets canModerate to false for targetUser, returns true on success, or an Error on failure.
