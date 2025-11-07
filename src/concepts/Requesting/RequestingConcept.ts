@@ -25,12 +25,50 @@ const REQUESTING_TIMEOUT = parseInt(
 // CORS configuration - allow frontend domain in production
 // Set REQUESTING_ALLOWED_DOMAIN environment variable to your frontend URL
 // For multiple origins, use comma-separated values: "https://domain1.com,https://domain2.com"
+// If not set, defaults to allowing localhost for development + production URL
 const REQUESTING_ALLOWED_DOMAIN_ENV = Deno.env.get("REQUESTING_ALLOWED_DOMAIN");
-const REQUESTING_ALLOWED_DOMAIN = REQUESTING_ALLOWED_DOMAIN_ENV
+const defaultOrigins = [
+  "http://localhost:3000",
+  "http://localhost:5173",
+  "http://localhost:5174",
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:5174",
+  "https://unwindr.onrender.com",
+];
+
+const allowedOrigins = REQUESTING_ALLOWED_DOMAIN_ENV
   ? REQUESTING_ALLOWED_DOMAIN_ENV.includes(",")
-    ? REQUESTING_ALLOWED_DOMAIN_ENV.split(",").map((s) => s.trim())
-    : REQUESTING_ALLOWED_DOMAIN_ENV
-  : "https://unwindr.onrender.com"; // Default to production frontend
+    ? [
+      ...REQUESTING_ALLOWED_DOMAIN_ENV.split(",").map((s) => s.trim()),
+      ...defaultOrigins,
+    ]
+    : [REQUESTING_ALLOWED_DOMAIN_ENV, ...defaultOrigins]
+  : defaultOrigins;
+
+// CORS origin function that allows any origin in the allowed list
+const corsOrigin = (origin: string | undefined) => {
+  // If no origin (like mobile apps or curl requests), allow first default origin
+  if (!origin) {
+    return defaultOrigins[0];
+  }
+
+  // Check if origin is in allowed list
+  if (allowedOrigins.includes(origin)) {
+    return origin;
+  }
+
+  // Allow localhost on any port for development (covers ports not explicitly in the list)
+  if (
+    origin.startsWith("http://localhost:") ||
+    origin.startsWith("http://127.0.0.1:")
+  ) {
+    return origin;
+  }
+
+  // Default: return undefined to reject the request
+  return undefined;
+};
 
 // Choose whether or not to persist responses
 const REQUESTING_SAVE_RESPONSES = Deno.env.get("REQUESTING_SAVE_RESPONSES") ??
@@ -201,7 +239,7 @@ export function startRequestingServer(
   app.use(
     "/*",
     cors({
-      origin: REQUESTING_ALLOWED_DOMAIN,
+      origin: corsOrigin,
       credentials: true,
       allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
       allowHeaders: ["Content-Type", "Authorization"],

@@ -28,18 +28,56 @@ async function main() {
   // CORS configuration - allow frontend domain
   // Set ALLOWED_ORIGIN environment variable to your frontend URL
   // For multiple origins, use comma-separated values: "https://domain1.com,https://domain2.com"
+  // If not set, defaults to allowing localhost for development + production URL
   const ALLOWED_ORIGIN_ENV = Deno.env.get("ALLOWED_ORIGIN");
-  const ALLOWED_ORIGIN = ALLOWED_ORIGIN_ENV
+  const defaultOrigins = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5174",
+    "https://unwindr.onrender.com",
+  ];
+
+  const allowedOrigins = ALLOWED_ORIGIN_ENV
     ? ALLOWED_ORIGIN_ENV.includes(",")
-      ? ALLOWED_ORIGIN_ENV.split(",").map((s) => s.trim())
-      : ALLOWED_ORIGIN_ENV
-    : "https://unwindr.onrender.com"; // Default to production frontend
+      ? [
+        ...ALLOWED_ORIGIN_ENV.split(",").map((s) => s.trim()),
+        ...defaultOrigins,
+      ]
+      : [ALLOWED_ORIGIN_ENV, ...defaultOrigins]
+    : defaultOrigins;
+
+  // CORS origin function that allows any origin in the allowed list
+  const corsOrigin = (origin: string | undefined) => {
+    // If no origin (like mobile apps or curl requests), allow first default origin
+    if (!origin) {
+      return defaultOrigins[0];
+    }
+
+    // Check if origin is in allowed list
+    if (allowedOrigins.includes(origin)) {
+      return origin;
+    }
+
+    // Allow localhost on any port for development (covers ports not explicitly in the list)
+    if (
+      origin.startsWith("http://localhost:") ||
+      origin.startsWith("http://127.0.0.1:")
+    ) {
+      return origin;
+    }
+
+    // Default: return undefined to reject the request
+    return undefined;
+  };
 
   // Apply CORS middleware
   app.use(
     "*",
     cors({
-      origin: ALLOWED_ORIGIN,
+      origin: corsOrigin,
       credentials: true,
       allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
       allowHeaders: ["Content-Type", "Authorization"],
