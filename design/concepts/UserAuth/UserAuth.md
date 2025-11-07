@@ -1,6 +1,7 @@
 # UserAuth Concept
 
 [text](../../../context/design/brainstorming/questioning.md/steps/response.b80891d5.md)
+[Final Revision](../../../context/design/concepts/UserAuth/UserAuth.md/steps/_.66966517.md)
 
 concept UserAuth [User]
 purpose authenticate users

@@ -6,9 +6,11 @@
 
 [Enhancements While Doing Frontend](../../../context/design/concepts/PlaceCatalog/PlaceCatalog.md/steps/_.d2c94828.md)
 
+[Final Adjustments](../../../context/design/concepts/PlaceCatalog/PlaceCatalog.md/steps/_.4c46f91c.md)
+
 concept PlaceCatalog [User]
 purpose manage discoverable places and their basic data
-principle users can add, verify, and update places; system can seed from provider
+principle users can discover and retrieve place information; places are seeded via scripts, not through the concept
 
 state
   a set of Places with
@@ -20,40 +22,25 @@ state
     an addedBy User
     a location Location
     a source String // "provider" or "user_added"
+    tags (optional) Array of String
+    editorialSummary (optional) String
+    googleRating (optional) Number
+    googleReviewCount (optional) Number
+    imagesUrl (optional) String
   
   a set of Locations with
     a latitude Number
     a longitude Number
 
 actions
-  seedPlaces () : Empty | {error: string}
-    requires database is empty (0 places)
-    effect initial one-time seed of places for Cambridge, MA and Boston, MA from OpenStreetMap Overpass API
-  
-  bulkImportOSMPlaces (osmDataPath: String) : Empty | {error: string}
-    requires osmDataPath points to valid GeoJSON file from OSM extract
-    effect performs one-time bulk import of places from OpenStreetMap data, checks for duplicates
-  
   addPlace (userId: Id, name: String, address: String, category: String, lat: Number, lng: Number) : (placeId: Id) | {error: string}
-    requires user is authenticated and name is not empty and coordinates are valid
-    effect creates user-added place, initially unverified
+    requires name is not empty and coordinates are valid
+    effect creates a new place (internal use only for testing/seeding, not exposed to end users)
   
-  setPlaceVerificationStatus (placeId: Id, moderatorId: Id, isVerified: Boolean) : Empty | {error: string}
-    requires user has moderation privileges and place exists
-    effect sets the verification status of the place (true for verified, false for unverified/deactivated)
+  getPlacesInViewport (southLat: Number, westLng: Number, northLat: Number, eastLng: Number) : (places: Array<{id: Id, name: String, category: String, lat: Number, lng: Number}>) | {error: string}
+    requires coordinates are valid, forming a proper viewport rectangle
+    effect returns places within the viewport with essential data for map display
   
-  updatePlace (placeId: Id, name: String, address: String, userId: Id) : Empty | {error: string}
-    requires place exists and user is authenticated
-    effect updates place details
-  
-  _getPlacesInArea (centerLat: Number, centerLng: Number, radius: Number) : (places: [Id]) | {error: string}
-    requires coordinates are valid and radius > 0
-    effect returns array of IDs of places found within specified circular area (radius in kilometers)
-  
-  _getPlaceDetails (placeId: Id) : (place: {name: String, address: String, ...}) | {error: string}
+  _getPlaceDetails (placeId: Id) : (place: {name: String, address: String, category: String, verified: Flag, addedBy: User, location: Location, source: String, ...}) | {error: string}
     requires place exists
     effect returns full details of specified place
-  
-  checkAreaCoverage (centerLat: Number, centerLng: Number, radius: Number) : (placeCount: Number) | {error: string}
-    requires coordinates are valid and radius > 0
-    effect returns number of places already in database for this area, useful to check if seeding is needed
