@@ -109,4 +109,11 @@ export const exclusions: Array<string> = [
   // UserAuth - authenticated actions
   "/api/UserAuth/logout", // requires valid session token
   "/api/UserAuth/getAuthenticatedUser", // requires valid session token
+
+  // Bookmark - all actions require authentication (user-specific)
+  "/api/Bookmark/bookmarkPlace", // requires valid session token
+  "/api/Bookmark/unbookmarkPlace", // requires valid session token
+  "/api/Bookmark/getUserBookmarks", // requires valid session token
+  "/api/Bookmark/getBookmarkedPlaces", // requires valid session token
+  "/api/Bookmark/isBookmarked", // requires valid session token
 ];

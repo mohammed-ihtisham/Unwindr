@@ -7,6 +7,7 @@ export const Engine = new SyncConcept();
 
 import { getDb } from "@utils/database.ts";
 
+import BookmarkConcept from "./Bookmark/BookmarkConcept.ts";
 import PlaceCatalogConcept from "./PlaceCatalog/PlaceCatalogConcept.ts";
 import LikertSurveyConcept from "./LikertSurvey/LikertSurveyConcept.ts";
 import InterestFilterConcept from "./InterestFilter/InterestFilterConcept.ts";
@@ -15,6 +16,7 @@ import UserAuthConcept from "./UserAuth/UserAuthConcept.ts";
 import RequestingConcept from "./Requesting/RequestingConcept.ts";
 import MediaLibraryConcept from "./MediaLibrary/MediaLibraryConcept.ts";
 
+export type { default as BookmarkConcept } from "./Bookmark/BookmarkConcept.ts";
 export type { default as PlaceCatalogConcept } from "./PlaceCatalog/PlaceCatalogConcept.ts";
 export type { default as LikertSurveyConcept } from "./LikertSurvey/LikertSurveyConcept.ts";
 export type { default as InterestFilterConcept } from "./InterestFilter/InterestFilterConcept.ts";
@@ -26,6 +28,7 @@ export type { default as MediaLibraryConcept } from "./MediaLibrary/MediaLibrary
 // Initialize the database connection
 export const [db, client] = await getDb();
 
+export const Bookmark = Engine.instrumentConcept(new BookmarkConcept(db));
 export const PlaceCatalog = Engine.instrumentConcept(new PlaceCatalogConcept(db));
 export const LikertSurvey = Engine.instrumentConcept(new LikertSurveyConcept(db));
 export const InterestFilter = Engine.instrumentConcept(new InterestFilterConcept(db));

@@ -6,6 +6,7 @@ import type { Sync } from "@engine";
 
 import * as sync_interestfilter from "./interestfilter.sync.ts";
 import * as sync_sample from "./sample.sync.ts";
+import * as sync_bookmark from "./bookmark.sync.ts";
 import * as sync_userauth from "./userauth.sync.ts";
 
 const allSyncs: Record<string, Sync> = {};
@@ -19,6 +20,11 @@ for (const [name, func] of Object.entries(sync_interestfilter)) {
 for (const [name, func] of Object.entries(sync_sample)) {
   if (typeof func === "function") {
     allSyncs[`sample.${name}`] = func as Sync;
+  }
+}
+for (const [name, func] of Object.entries(sync_bookmark)) {
+  if (typeof func === "function") {
+    allSyncs[`bookmark.${name}`] = func as Sync;
   }
 }
 for (const [name, func] of Object.entries(sync_userauth)) {
