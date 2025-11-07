@@ -25,12 +25,49 @@
  */
 
 export const inclusions: Record<string, string> = {
-  // Feel free to delete these example inclusions
-  "/api/LikertSurvey/_getSurveyQuestions": "this is a public query",
-  "/api/LikertSurvey/_getSurveyResponses": "responses are public",
-  "/api/LikertSurvey/_getRespondentAnswers": "answers are visible",
-  "/api/LikertSurvey/submitResponse": "allow anyone to submit response",
-  "/api/LikertSurvey/updateResponse": "allow anyone to update their response",
+  // LikertSurvey - public queries and actions
+  "/api/LikertSurvey/_getSurveyQuestions":
+    "public query to retrieve survey questions",
+  "/api/LikertSurvey/_getSurveyResponses":
+    "public query to retrieve survey responses",
+  "/api/LikertSurvey/_getRespondentAnswers":
+    "public query to retrieve respondent answers",
+  "/api/LikertSurvey/submitResponse":
+    "public action allowing anyone to submit a response",
+  "/api/LikertSurvey/updateResponse":
+    "public action allowing anyone to update their response",
+
+  // InterestFilter - public actions
+  "/api/InterestFilter/tagPlace": "public action allowing anyone to tag places",
+  "/api/InterestFilter/getMatchingPlaces":
+    "public query to get matching places based on user preferences",
+  "/api/InterestFilter/setPreferences":
+    "public action allowing anyone to set manual preferences (no login required)",
+  "/api/InterestFilter/clearPreferences":
+    "public action allowing anyone to clear their preferences (no login required)",
+
+  // MediaLibrary - public queries
+  "/api/MediaLibrary/_getMediaByPlace":
+    "public query to retrieve media IDs for a place",
+  "/api/MediaLibrary/getMediaItemsByPlace":
+    "public query to retrieve full media items for a place",
+  "/api/MediaLibrary/getPreviewImagesForPlaces":
+    "public query to get preview images for multiple places",
+
+  // PlaceCatalog - public queries
+  "/api/PlaceCatalog/_getPlaceDetails":
+    "public query to retrieve place details",
+  "/api/PlaceCatalog/getPlacesInViewport":
+    "public query to get places within a viewport for map display",
+
+  // QualityRanking - public query
+  "/api/QualityRanking/_getRecommendedPlaces":
+    "public query to get recommended places based on user preferences",
+
+  // UserAuth - public registration and login
+  "/api/UserAuth/registerUser":
+    "public action allowing anyone to register a new user",
+  "/api/UserAuth/login": "public action allowing anyone to login",
 };
 
 /**
@@ -44,7 +81,32 @@ export const inclusions: Record<string, string> = {
  */
 
 export const exclusions: Array<string> = [
-  // Feel free to delete these example exclusions
+  // LikertSurvey - admin/authenticated actions
   "/api/LikertSurvey/createSurvey",
   "/api/LikertSurvey/addQuestion",
+
+  // InterestFilter - private methods and authenticated actions
+  "/api/InterestFilter/initializeAllowedTags", // private initialization method
+  "/api/InterestFilter/_whitelistValidator", // private validator
+  "/api/InterestFilter/_tagCountValidator", // private validator
+  "/api/InterestFilter/_contradictionValidator", // private validator
+  "/api/InterestFilter/_confidenceValidator", // private validator
+  "/api/InterestFilter/_callLLM", // private LLM call method
+  "/api/InterestFilter/_mockLLMCall", // private mock method
+  "/api/InterestFilter/inferPreferencesFromText", // requires authentication (LLM generation)
+
+  // MediaLibrary - backend/admin actions
+  "/api/MediaLibrary/seedMedia", // backend-only seeding action
+
+  // PlaceCatalog - authenticated actions
+  "/api/PlaceCatalog/addPlace", // requires authentication
+
+  // QualityRanking - backend actions and authenticated preferences
+  "/api/QualityRanking/updateMetrics", // backend-only metric updates
+  "/api/QualityRanking/calculateQualityScore", // backend-only score calculation
+  "/api/QualityRanking/setPreferences", // requires authentication
+
+  // UserAuth - authenticated actions
+  "/api/UserAuth/logout", // requires valid session token
+  "/api/UserAuth/getAuthenticatedUser", // requires valid session token
 ];
