@@ -1,4 +1,5 @@
 import { Hono } from "jsr:@hono/hono";
+import { cors } from "jsr:@hono/hono/cors";
 import { getDb } from "@utils/database.ts";
 import { walk } from "jsr:@std/fs";
 import { parseArgs } from "jsr:@std/cli/parse-args";
@@ -23,6 +24,28 @@ const CONCEPTS_DIR = "src/concepts";
 async function main() {
   const [db] = await getDb();
   const app = new Hono();
+
+  // CORS configuration - allow frontend domain
+  // Set ALLOWED_ORIGIN environment variable to your frontend URL
+  // For multiple origins, use comma-separated values: "https://domain1.com,https://domain2.com"
+  const ALLOWED_ORIGIN_ENV = Deno.env.get("ALLOWED_ORIGIN");
+  const ALLOWED_ORIGIN = ALLOWED_ORIGIN_ENV
+    ? ALLOWED_ORIGIN_ENV.includes(",")
+      ? ALLOWED_ORIGIN_ENV.split(",").map((s) => s.trim())
+      : ALLOWED_ORIGIN_ENV
+    : "https://unwindr.onrender.com"; // Default to production frontend
+
+  // Apply CORS middleware
+  app.use(
+    "*",
+    cors({
+      origin: ALLOWED_ORIGIN,
+      credentials: true,
+      allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+      allowHeaders: ["Content-Type", "Authorization"],
+      exposeHeaders: ["Content-Type"],
+    }),
+  );
 
   app.get("/", (c) => c.text("Concept Server is running."));
 

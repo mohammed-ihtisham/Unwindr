@@ -2,6 +2,8 @@
 
 [text](../../../context/design/brainstorming/questioning.md/steps/response.bc341f8d.md)
 
+[Final Iteration](../../../context/design/concepts/MediaLibrary/MediaLibrary.md/steps/_.c30b35c0.md)
+
 concept MediaLibrary [User, Place]
 purpose store and retrieve media items for visual discovery
 principle only manages media data, not engagement or analytics
@@ -10,24 +12,25 @@ state
   a set of MediaItems with
     an _id Id
     a placeId Id
-    a contributorId Id // userId if source is "user", otherwise system/null
+    a contributorId Id // Always null for MVP (provider-sourced only)
     a createdAt Date
     an imageUrl String
-    a source String // "provider" | "user"
+    a source String // "provider" (MVP: user contributions not supported)
 
 actions
   seedMedia (placeId: Id, urls: set String) : (count: Number)
-    requires urls not empty
-    effect inserts provider-sourced media items, setting source to "provider"
+    requires urls not empty, placeId provided
+    effect inserts provider-sourced media items, setting source to "provider" and contributorId to null
 
-  addMedia (userId: Id, placeId: Id, imageUrl: String) : (mediaId: Id)
-    requires userId valid and imageUrl non-empty
-    effect adds user-contributed media, setting source to "user" and contributorId to userId
-
-  deleteMedia (userId: Id, mediaId: Id) : (success: Boolean)
-    requires mediaId exists and userId matches contributorId of mediaId
-    effect removes media item from the set
 
   getMediaByPlace (placeId: Id) : (mediaIds: set Id)
     requires placeId provided
     effect returns media item IDs ordered by createdAt desc
+
+  getMediaItemsByPlace (placeId: Id) : (mediaItems: Array MediaItem)
+    requires placeId provided
+    effect returns full media items with image URLs ordered by createdAt desc
+
+  getPreviewImagesForPlaces (placeIds: Array<Id>) : (previews: Array<{ placeId: Id, previewImage: String | null }>)
+    requires placeIds provided (can be empty array)
+    effect returns a preview image (newest image) for each place in the given array, returns null for places with no media
