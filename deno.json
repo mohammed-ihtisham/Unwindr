@@ -15,7 +15,6 @@
         "test:place": "deno test --allow-read --allow-write --allow-env --allow-net --allow-sys src/concepts/PlaceCatalog/PlaceCatalogConcept.test.ts",
         "test:media-library": "deno test --allow-read --allow-env --allow-net --allow-sys src/concepts/MediaLibrary/MediaLibrary.test.ts",
         "test:likert": "deno test --allow-read --allow-env --allow-net --allow-sys src/concepts/LikertSurvey/LikertSurveyConcept.test.ts",
-        "test:quality-ranking": "deno test --allow-read --allow-env --allow-net --allow-sys src/concepts/QualityRanking/QualityRankingConcept.test.ts",
         "test:interest-filter": "deno test --allow-read --allow-env --allow-net --allow-sys src/concepts/InterestFilter/InterestFilterConcept.test.ts",
         "test:bookmark": "deno test --allow-read --allow-env --allow-net --allow-sys src/concepts/Bookmark/BookmarkConcept.test.ts",
         "import:boston": "deno run --allow-all scripts/import-boston-places.ts",

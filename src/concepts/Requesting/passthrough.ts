@@ -60,10 +60,6 @@ export const inclusions: Record<string, string> = {
   "/api/PlaceCatalog/getPlacesInViewport":
     "public query to get places within a viewport for map display",
 
-  // QualityRanking - public query
-  "/api/QualityRanking/_getRecommendedPlaces":
-    "public query to get recommended places based on user preferences",
-
   // UserAuth - public registration and login
   "/api/UserAuth/registerUser":
     "public action allowing anyone to register a new user",
@@ -100,11 +96,6 @@ export const exclusions: Array<string> = [
 
   // PlaceCatalog - authenticated actions
   "/api/PlaceCatalog/addPlace", // requires authentication
-
-  // QualityRanking - backend actions and authenticated preferences
-  "/api/QualityRanking/updateMetrics", // backend-only metric updates
-  "/api/QualityRanking/calculateQualityScore", // backend-only score calculation
-  "/api/QualityRanking/setPreferences", // requires authentication
 
   // UserAuth - authenticated actions
   "/api/UserAuth/logout", // requires valid session token
