@@ -2,103 +2,86 @@
 
 ## What Was Hard
 
-**Scope management**: The hardest part was accepting that my initial vision was too ambitious. I had to make difficult decisions to cut features I was excited about (QualityRanking, MediaAnalytics, user contributions) because they simply weren't feasible for an MVP. Learning to say "not yet" instead of "yes" was challenging but crucial.
+**Managing scope**  
+The biggest challenge was realizing my original idea was way too ambitious. I wanted to build a nationwide platform with features like QualityRanking, MediaAnalytics, and user-generated places, but that just wasn’t realistic for a first version. Learning to say “not yet” instead of “yes, let’s build it” was surprisingly tough. It taught me that scoping isn’t about giving up on ideas but rather how it’s about protecting the project from collapsing under its own weight.
 
-**Cost discovery**: I didn't realize how expensive Google Maps API would be until I actually researched it. This was a wake-up call that forced me to pivot to OpenStreetMap, which turned out to be a better solution anyway. I should have checked API costs and infrastructure requirements before designing the initial concept.
+**Discovering real costs**  
+I didn’t think much about API pricing until I really looked into the Google Maps API when working on the backend and realized how quickly costs could pile up. That moment forced me to rethink my whole approach and switch to OpenStreetMap. It was humbling, but also empowering as I learned that open-source tools can be just as good (and sometimes better) if you’re willing to adapt.
 
-**LLM-generated code quality**: When working on InterestFilter, the LLM frequently generated mock code and hardcoded examples instead of proper validation logic. I had to repeatedly refine prompts and provide more context to get usable code. This taught me that LLMs need very specific instructions and context to generate production-quality code.
-
-**Database optimization**: Understanding when to use full objects vs. IDs, how to structure GeoJSON for MongoDB's geospatial queries, and optimizing query patterns was a learning curve. I made several iterations before landing on the right data model.
+**Figuring out data modeling**  
+Designing a database that handled geospatial data efficiently was harder than I expected. I had to learn how GeoJSON works in MongoDB, when to store full objects vs. just IDs, and how to query efficiently. I went through multiple versions before finding a structure that felt right. That process made me appreciate how much good data modeling shapes the entire system.
 
 ## What Was Easy
 
-**Concept design**: Once I understood the concept framework, designing the high-level structure of concepts, their actions, and validators felt intuitive. The separation of concerns made it easy to reason about each concept independently.
+**Concept design**  
+Once I wrapped my head around the concept-driven architecture, it started to click. Thinking in terms of concepts, actions, and validators made it easy to reason about each piece separately. It made the system feel modular and understandable, which helped me move faster later on.
 
-**Using OpenStreetMap**: Once I discovered OpenStreetMap, working with their data was straightforward. The Overpass API and GeoJSON format were well-documented, and bulk importing was simpler than I expected.
+**Using OpenStreetMap**  
+After switching from Google Maps, OpenStreetMap felt refreshingly simple. The documentation was clear, and the Overpass API just worked. It was one of those “why didn’t I do this sooner?” moments Sure, Google Maps would have provided much better data, but in this case, we had to be cost-aware to make the best decisions for the project.
 
-**Iterative refinement**: Having a clear process of design → implement → test → refine made it easy to make incremental improvements. Each iteration made the design better, and seeing the progress was motivating.
+**Iterating gradually**  
+The cycle of design → implement → test → refine made the project flow naturally. Each iteration helped me see visible improvement, which made it much easier to stay motivated and focused.
 
 ## What Went Well
 
-**Scope reduction**: Although it was hard, reducing scope from nationwide to local (Cambridge/Boston) was one of my best decisions. It made the project actually feasible and forced me to focus on core value.
+**Narrowing the focus**  
+Reducing scope to just the Cambridge/Boston area ended up being one of the best decisions I made. It kept the project achievable and meaningful, instead of spreading too thin.
 
-**Separation of concerns**: Splitting MediaGallery into MediaLibrary and MediaAnalytics, and moving initialization scripts out of concepts, made the codebase much cleaner and more maintainable. This architectural decision paid off throughout development.
+**Cleaner architecture**  
+Splitting MediaGallery into MediaLibrary and MediaAnalytics made the system easier to maintain. Similarly, moving initialization code out of concepts helped me avoid messy dependencies. Those small architectural changes had big payoffs later.
 
-**Database optimization**: Switching to MongoDB GeoJSON format and using ID types instead of full objects significantly improved query performance and made the data model more scalable.
+**Database improvements**  
+Once I switched to GeoJSON and ID-based references, performance noticeably improved. It felt like proof that thoughtful database design really matters.
 
-**Bookmark concept**: Adding the Bookmark concept was straightforward because I kept it simple and focused. It solved a real user need without adding unnecessary complexity.
+**Bookmark concept**  
+The Bookmark feature was a small but satisfying win—it was simple, purposeful, and genuinely useful. It reminded me that not every good idea has to be complex.
 
-## Mistakes and How to Avoid Them
+## Mistakes and Lessons Learned
 
-**Not checking costs early**: I designed the entire system assuming Google Maps would work, then discovered it was too expensive. **Lesson**: Always research API costs, infrastructure requirements, and external dependencies before finalizing the design.
+**Not checking costs early**  
+Designing around expensive APIs before checking their costs was a rookie mistake. *Lesson learned:* always research dependencies early. It’s easier to adapt your design on paper than in production.
 
-**Assuming scale exists**: I built features (QualityRanking, MediaAnalytics) that assumed user engagement data I didn't have. **Lesson**: Build for the scale you have, not the scale you want. Add scale-dependent features later when the data exists.
+**Building for hypothetical scale**  
+I added features like MediaAnalytics without having enough user data to justify them. *Lesson:* build for the scale you have, not the scale you wish you had.
 
-**Over-engineering moderation**: I included moderation features in UserAuth without considering whether they were needed for an MVP. **Lesson**: Don't build infrastructure for problems you don't have yet. Add features when there's actual need, not theoretical need.
+**Over-engineering too soon**  
+I added moderation tools in UserAuth even though I didn’t have users yet. *Lesson:* build for real problems, not imaginary ones.
 
-**Mixing concerns**: Initially, I put data initialization methods in concepts, blurring the line between runtime functionality and deployment setup. **Lesson**: Keep concepts focused on their core responsibility. Move one-time setup tasks to scripts.
+## Skills I Developed
 
-## Skills Acquired
+- **Product scoping:** Learned how to balance ambition and feasibility.  
+- **API research:** Became better at evaluating cost, usability, and long-term fit.  
+- **MongoDB optimization:** Gained hands-on experience with geospatial queries and data shaping.  
+- **Concept-driven architecture:** Learned to think modularly and structure systems around concepts.  
+- **Cost-aware design:** Started prioritizing sustainable, open-source approaches.
 
-**Product scoping**: I learned to balance ambition with feasibility, making difficult decisions about what to build now vs. later.
+## Skills I Still Want to Improve
 
-**API research and selection**: I became better at evaluating APIs based on cost, documentation quality, and fit for the use case.
-
-**MongoDB optimization**: I gained experience with geospatial queries, GeoJSON formatting, and optimizing document structure for performance.
-
-**Concept-driven design**: I learned to think in terms of concepts, actions, validators, and state, which made the architecture more modular and maintainable.
-
-**Cost-conscious development**: I developed better instincts for identifying expensive operations and finding open-source alternatives.
-
-## Skills to Develop Further
-
-**Prompt engineering**: I need to get better at crafting prompts that produce production-quality code from LLMs without multiple iterations.
-
-**Testing strategies**: I should develop more comprehensive testing approaches, especially for LLM-integrated features like InterestFilter's natural language interpretation.
-
-**Performance optimization**: While I optimized for MongoDB, I could learn more about query optimization, indexing strategies, and caching patterns.
-
-**User research**: I made assumptions about what users need without much user research. Learning to validate assumptions earlier would improve future projects.
-
-**Deployment and DevOps**: I focused on development but could improve my knowledge of deployment pipelines, monitoring, and production best practices.
+- **Testing strategies:** I need stronger automated and LLM-based testing for more complex features.  
+- **Performance tuning:** There’s still more to learn about indexing, caching, and query optimization.  
+- **User research:** I relied too much on intuition; I’d like to back design decisions with actual user feedback.
 
 ## Using the Context Tool
 
-The Context tool was invaluable for maintaining continuity across development sessions. I used it to:
-- Store immutable snapshots of concept specifications as they evolved
-- Track design decisions and rationale over time
-- Reference previous implementations when making changes
-- Share context with the LLM about architectural decisions
+The Context tool became a kind of living notebook for the project. I used it to:
+- Record evolving concept specs  
+- Document why I made certain design choices  
+- Keep consistent patterns across development sessions  
 
-The tool helped me avoid repeating mistakes and maintain consistency across the codebase. However, I sometimes struggled with organizing context effectively—too much context could overwhelm the LLM, while too little meant it would generate code that didn't fit the existing architecture.
+It made the project feel cohesive, even after weeks of iteration. The only challenge was learning to manage how much context to provide—too much could confuse the LLM, but too little made it lose track of structure. The main issue I endured with it was using it to update code for files that already had some content as often it seemed to redo it competeely in undesired ways. While it was good for creating new files, it was fairly hard to use to make changes to existing files, which I wonder whether it was due to poor prompt engineering on my end.
 
 ## Using Agentic Coding Tools
 
-I used agentic coding tools (like Cursor) extensively for:
-- Generating boilerplate code for concepts and actions
-- Implementing validators and state management
-- Refactoring code when design changed
-- Debugging and fixing errors
+Tools like Cursor saved me countless hours writing boilerplate code and doing repetitive refactors. They worked best when I gave them detailed context—architecture, naming conventions, and examples. Without that, the generated code often *looked* right but didn’t fit the system’s logic.
 
-**What worked well**: The tools were great for generating repetitive code, implementing straightforward logic, and making refactorings across multiple files. They saved significant time on boilerplate.
-
-**Challenges**: The tools sometimes generated code that looked correct but didn't match the existing patterns or violated architectural principles. I had to review carefully and often make manual adjustments.
-
-**Key insight**: Agentic tools are most valuable when you provide very specific context about existing patterns, architecture, and constraints. Generic prompts produce generic code that doesn't fit your system.
+**Big takeaway:** LLMs amplify clarity. The clearer my instructions, the better the outcome. Vague prompts always produced vague code.
 
 ## Conclusions About LLMs in Software Development
 
-**LLMs are powerful assistants, not replacements**: They excel at generating boilerplate, implementing well-defined patterns, and making repetitive changes. But they struggle with architectural decisions, understanding complex systems, and generating code that fits existing patterns without explicit guidance.
+- **They’re assistants, not architects.** LLMs are great at structured implementation, but not at understanding full systems or making nuanced design decisions.  
+- **Context makes or breaks results.** The more specific the context, the better the code.  
+- **Human review is non-negotiable.** LLMs can write convincing code that’s subtly wrong.  
+- **Iteration is part of the process.** The first output is rarely perfect; refinement is where the value comes.  
+- **They shine in repetition, not innovation.** Perfect for boilerplate, refactoring, and pattern-based work—but vision and architecture remain human tasks.
 
-**Context is critical**: The quality of LLM output is directly proportional to the quality and specificity of context provided. Generic prompts produce generic code; detailed context about architecture, patterns, and constraints produces much better results.
-
-**Review is essential**: Never blindly trust LLM-generated code. Always review for correctness, adherence to patterns, and fit with the existing system. LLMs can generate plausible-looking code that's subtly wrong.
-
-**Iteration is normal**: Expect to iterate on prompts and review/refine output. The first generation is rarely perfect, but with good feedback loops, LLMs can be highly productive.
-
-**Best for well-defined tasks**: LLMs work best when the task is well-defined with clear inputs, outputs, and constraints. Vague or exploratory tasks produce poor results.
-
-**Appropriate role**: LLMs are excellent for accelerating development, reducing boilerplate, and implementing straightforward logic. But they're not good at making architectural decisions, understanding business requirements, or generating creative solutions. The developer's role is to provide vision, architecture, context, and quality control.
-
-The key is finding the right balance: use LLMs to accelerate what they're good at (implementation, refactoring, boilerplate) while maintaining human oversight for what matters most (architecture, design, quality, correctness).
-
+**In short:** LLMs can be incredible accelerators when guided well. The developer’s role is to provide the clarity, structure, and judgment that make the collaboration meaningful.
