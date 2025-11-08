@@ -5,7 +5,7 @@ A local discovery platform for exploring places in Cambridge, MA and Boston, MA.
 ## 📚 Key Documents
 
 - **[Design Document](final-design-doc.md)** - Final design documentation detailing the evolution from initial concept to MVP
-- **[Video & Trace](final-video.md)** - Project video and [trace log](trace-log.md) of incoming actions
+- **[Video & Trace](final-video.md)** - Project video and [trace log](trace-log.txt) of incoming actions
 - **[Reflections](reflection.md)** - Project reflections on challenges, successes, and lessons learned
 
 ## Overview
